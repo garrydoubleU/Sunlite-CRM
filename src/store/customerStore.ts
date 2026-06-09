@@ -25,6 +25,7 @@ function gasCustomerToLocal(c: GASCustomer): Customer {
     activeStatus: c.activeStatus,
     openOrderCount: c.openOrderCount,
     revenue: c.revenue,
+    revenueByQuarter: c.revenueByQuarter,
     dayOfWeek: c.dayOfWeek,
   };
 }

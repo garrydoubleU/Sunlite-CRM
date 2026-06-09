@@ -28,6 +28,7 @@ export interface Customer {
   activeStatus: boolean;
   openOrderCount: number;
   revenue: number;
+  revenueByQuarter: Record<string, number>; // e.g. { Q1_2024: 1200, Q2_2024: 800 }
   dayOfWeek: number;
 }
 

@@ -94,6 +94,7 @@ export interface GASCustomer {
   activeStatus: boolean;
   openOrderCount: number;
   revenue: number;
+  revenueByQuarter: Record<string, number>;
   dayOfWeek: number;
 }
 
@@ -118,10 +119,14 @@ function mapRawCustomer(r: Record<string, unknown>): GASCustomer {
   };
   const freq = freqMap[freqRaw] ?? 'monthly';
 
-  // Sum quarterly revenue columns (Q1_2023, Q2_2023, etc.)
+  // Collect quarterly revenue columns (Q1_2023, Q2_2024, etc.)
   let revenue = 0;
+  const revenueByQuarter: Record<string, number> = {};
   Object.entries(r).forEach(([k, v]) => {
-    if (/^Q\d_\d{4}$/.test(k) && typeof v === 'number') revenue += v;
+    if (/^Q\d_\d{4}$/.test(k) && typeof v === 'number') {
+      revenue += v;
+      revenueByQuarter[k] = v;
+    }
   });
 
   // Derive dayOfWeek from VisitStartDate if present
@@ -149,6 +154,7 @@ function mapRawCustomer(r: Record<string, unknown>): GASCustomer {
     activeStatus: String(r.Status ?? r.status ?? 'active').toLowerCase() !== 'inactive',
     openOrderCount: Number(r.OpenOrders ?? r.openOrders ?? 0),
     revenue,
+    revenueByQuarter,
     dayOfWeek,
   };
 }

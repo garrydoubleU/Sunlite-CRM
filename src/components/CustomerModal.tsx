@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { X, MapPin, Phone, Mail, Calendar, Clock, Plus, ChevronDown, FileText, PhoneCall, Navigation, Star } from 'lucide-react';
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import type { Customer, ActivityType } from '../types';
 import { useCustomerStore } from '../store/customerStore';
 import { useAuthStore } from '../store/authStore';
@@ -49,6 +50,24 @@ export default function CustomerModal({ customer, onClose }: CustomerModalProps)
   const nextVisit = calculateNextVisit(customer.lastContactDate, customer.visitFrequency, customer.dayOfWeek);
   const daysAgo = safeDaysSince(customer.lastContactDate);
   const tier = TIER_COLORS[customer.priorityTier];
+  const showVisitSchedule = customer.visitFrequency === 'weekly' || customer.visitFrequency === 'biweekly';
+
+  // Build quarterly revenue table: { year: { Q1, Q2, Q3, Q4 } }
+  const revenueTable = useMemo(() => {
+    const byYear: Record<string, { Q1: number; Q2: number; Q3: number; Q4: number; total: number }> = {};
+    Object.entries(customer.revenueByQuarter ?? {}).forEach(([key, val]) => {
+      const m = key.match(/^Q(\d)_(\d{4})$/);
+      if (!m) return;
+      const [, q, yr] = m;
+      if (!byYear[yr]) byYear[yr] = { Q1: 0, Q2: 0, Q3: 0, Q4: 0, total: 0 };
+      byYear[yr][`Q${q}` as 'Q1'] = val;
+      byYear[yr].total += val;
+    });
+    return Object.entries(byYear).sort(([a], [b]) => Number(a) - Number(b));
+  }, [customer.revenueByQuarter]);
+
+  const chartData = revenueTable.map(([yr, d]) => ({ year: yr, total: d.total }));
+  const currentYear = new Date().getFullYear().toString();
 
   const handleSave = async () => {
     if (!notes.trim()) return;
@@ -157,8 +176,8 @@ export default function CustomerModal({ customer, onClose }: CustomerModalProps)
             {/* Left column */}
             <div className="flex-1 p-4 md:p-5 space-y-5 md:border-r border-gray-100">
 
-              {/* Field Visit Schedule */}
-              <div>
+              {/* Field Visit Schedule — only for weekly/biweekly accounts */}
+              {showVisitSchedule && <div>
                 <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center gap-2">
                     <Calendar size={15} className="text-amber-500" />
@@ -208,7 +227,7 @@ export default function CustomerModal({ customer, onClose }: CustomerModalProps)
                     {getDueDateLabel(nextVisit)}
                   </span>
                 </div>
-              </div>
+              </div>}
 
               {/* Log Quick Note */}
               <div>
@@ -276,22 +295,70 @@ export default function CustomerModal({ customer, onClose }: CustomerModalProps)
               </div>
 
               {/* Financial Performance (admin only) */}
-              {showRevenue && customer.revenue > 0 && (
+              {showRevenue && revenueTable.length > 0 && (
                 <div>
-                  <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-3">Financial Performance</p>
-                  <div className="bg-gray-50 rounded-xl p-3 border border-gray-100">
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-xs font-bold text-gray-700">Annual Revenue</span>
-                      <span className="text-sm font-black text-gray-900">${customer.revenue.toLocaleString()}</span>
-                    </div>
-                    <div className="w-full bg-gray-200 rounded-full h-2">
-                      <div
-                        className="bg-amber-500 h-2 rounded-full"
-                        style={{ width: `${Math.min(100, (customer.revenue / 600000) * 100)}%` }}
-                      />
-                    </div>
-                    <p className="text-[10px] text-gray-400 mt-1">vs $600k top account</p>
+                  <div className="flex items-center justify-between mb-3">
+                    <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Financial Performance</p>
+                    <span className="text-[10px] text-amber-500 font-semibold flex items-center gap-1">
+                      <span className="w-2 h-2 rounded-full bg-amber-400 inline-block" /> Quarterly Breakdown
+                    </span>
                   </div>
+
+                  {/* Table */}
+                  <div className="overflow-x-auto rounded-xl border border-gray-100 mb-4">
+                    <table className="w-full text-xs">
+                      <thead>
+                        <tr className="bg-gray-50 border-b border-gray-100">
+                          <th className="text-left px-3 py-2 text-[10px] font-bold text-gray-400 uppercase tracking-wider">Year</th>
+                          <th className="text-right px-3 py-2 text-[10px] font-bold text-gray-400 uppercase">Q1</th>
+                          <th className="text-right px-3 py-2 text-[10px] font-bold text-gray-400 uppercase">Q2</th>
+                          <th className="text-right px-3 py-2 text-[10px] font-bold text-gray-400 uppercase">Q3</th>
+                          <th className="text-right px-3 py-2 text-[10px] font-bold text-gray-400 uppercase">Q4</th>
+                          <th className="text-right px-3 py-2 text-[10px] font-bold text-gray-400 uppercase">Total</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {revenueTable.map(([yr, d]) => (
+                          <tr key={yr} className="border-b border-gray-50 last:border-0">
+                            <td className="px-3 py-2 font-black text-gray-900">{yr}</td>
+                            {(['Q1', 'Q2', 'Q3', 'Q4'] as const).map(q => (
+                              <td key={q} className="px-3 py-2 text-right text-gray-600">
+                                {d[q] > 0 ? `$${d[q].toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '$0'}
+                              </td>
+                            ))}
+                            <td className="px-3 py-2 text-right font-black text-amber-600">
+                              ${d.total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Bar chart */}
+                  {chartData.length > 1 && (
+                    <div className="bg-white rounded-xl border border-gray-100 p-3">
+                      <div className="flex items-center justify-between mb-2">
+                        <p className="text-[10px] font-black text-gray-800 uppercase tracking-wider">Revenue Growth</p>
+                        <div className="flex items-center gap-3 text-[10px] text-gray-400">
+                          <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-400 inline-block" /> Current</span>
+                          <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-[#0F2A4A] inline-block" /> Past</span>
+                        </div>
+                      </div>
+                      <ResponsiveContainer width="100%" height={160}>
+                        <BarChart data={chartData} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
+                          <XAxis dataKey="year" tick={{ fontSize: 10 }} axisLine={false} tickLine={false} />
+                          <YAxis tick={{ fontSize: 10 }} axisLine={false} tickLine={false} tickFormatter={v => `$${(v/1000).toFixed(0)}k`} width={36} />
+                          <Tooltip formatter={(v) => [`$${Number(v).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, '']} labelStyle={{ fontWeight: 700 }} />
+                          <Bar dataKey="total" radius={[4, 4, 0, 0]}>
+                            {chartData.map(d => (
+                              <Cell key={d.year} fill={d.year === currentYear ? '#F59E0B' : '#0F2A4A'} />
+                            ))}
+                          </Bar>
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                  )}
                 </div>
               )}
             </div>

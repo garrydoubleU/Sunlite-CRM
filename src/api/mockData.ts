@@ -26,7 +26,7 @@ export const CUSTOMERS: Customer[] = [
     lastContactDate: subDays(now, 32).toISOString(),
     activeStatus: true,
     openOrderCount: 3,
-    revenue: 145000,
+    revenue: 145000, revenueByQuarter: {},
     dayOfWeek: 2,
   },
   {
@@ -44,7 +44,7 @@ export const CUSTOMERS: Customer[] = [
     lastContactDate: subDays(now, 5).toISOString(),
     activeStatus: true,
     openOrderCount: 7,
-    revenue: 312000,
+    revenue: 312000, revenueByQuarter: {},
     dayOfWeek: 2,
   },
   {
@@ -62,7 +62,7 @@ export const CUSTOMERS: Customer[] = [
     lastContactDate: subDays(now, 12).toISOString(),
     activeStatus: true,
     openOrderCount: 2,
-    revenue: 89000,
+    revenue: 89000, revenueByQuarter: {},
     dayOfWeek: 2,
   },
   {
@@ -80,7 +80,7 @@ export const CUSTOMERS: Customer[] = [
     lastContactDate: subDays(now, 8).toISOString(),
     activeStatus: true,
     openOrderCount: 5,
-    revenue: 278000,
+    revenue: 278000, revenueByQuarter: {},
     dayOfWeek: 2,
   },
   {
@@ -98,7 +98,7 @@ export const CUSTOMERS: Customer[] = [
     lastContactDate: subDays(now, 35).toISOString(),
     activeStatus: true,
     openOrderCount: 1,
-    revenue: 54000,
+    revenue: 54000, revenueByQuarter: {},
     dayOfWeek: 3,
   },
   {
@@ -116,7 +116,7 @@ export const CUSTOMERS: Customer[] = [
     lastContactDate: subDays(now, 18).toISOString(),
     activeStatus: true,
     openOrderCount: 0,
-    revenue: 41000,
+    revenue: 41000, revenueByQuarter: {},
     dayOfWeek: 4,
   },
   {
@@ -134,7 +134,7 @@ export const CUSTOMERS: Customer[] = [
     lastContactDate: subDays(now, 3).toISOString(),
     activeStatus: true,
     openOrderCount: 9,
-    revenue: 520000,
+    revenue: 520000, revenueByQuarter: {},
     dayOfWeek: 1,
   },
   {
@@ -152,7 +152,7 @@ export const CUSTOMERS: Customer[] = [
     lastContactDate: subDays(now, 40).toISOString(),
     activeStatus: true,
     openOrderCount: 4,
-    revenue: 167000,
+    revenue: 167000, revenueByQuarter: {},
     dayOfWeek: 1,
   },
   {
@@ -170,7 +170,7 @@ export const CUSTOMERS: Customer[] = [
     lastContactDate: subDays(now, 25).toISOString(),
     activeStatus: true,
     openOrderCount: 2,
-    revenue: 72000,
+    revenue: 72000, revenueByQuarter: {},
     dayOfWeek: 5,
   },
   {
@@ -188,7 +188,7 @@ export const CUSTOMERS: Customer[] = [
     lastContactDate: subDays(now, 45).toISOString(),
     activeStatus: true,
     openOrderCount: 0,
-    revenue: 28000,
+    revenue: 28000, revenueByQuarter: {},
     dayOfWeek: 4,
   },
   {
@@ -206,7 +206,7 @@ export const CUSTOMERS: Customer[] = [
     lastContactDate: subDays(now, 9).toISOString(),
     activeStatus: true,
     openOrderCount: 6,
-    revenue: 195000,
+    revenue: 195000, revenueByQuarter: {},
     dayOfWeek: 3,
   },
   {
@@ -224,7 +224,7 @@ export const CUSTOMERS: Customer[] = [
     lastContactDate: subDays(now, 28).toISOString(),
     activeStatus: true,
     openOrderCount: 1,
-    revenue: 38000,
+    revenue: 38000, revenueByQuarter: {},
     dayOfWeek: 5,
   },
 ];
