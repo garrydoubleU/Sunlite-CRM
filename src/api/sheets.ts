@@ -135,8 +135,9 @@ function mapRawCustomer(r: Record<string, unknown>): GASCustomer {
   return {
     id: String(r.ID ?? r.id ?? r.CustomerID ?? ''),
     name: String(r.Customer ?? r.CustomerName ?? r.customer ?? ''),
-    assignedRepId: String(r.SalesRep ?? r.salesRep ?? r.RepEmail ?? '').toLowerCase().trim(),
-    assignedRepName: String(r.SalespersonName ?? r.RepName ?? r.SalesRep ?? ''),
+    // "Sales Rep Email" → GAS strips spaces → SalesRepEmail; may be comma-separated list of reps
+    assignedRepId: String(r.SalesRepEmail ?? r.SalesRep ?? r.salesRep ?? r.RepEmail ?? '').toLowerCase().trim(),
+    assignedRepName: String(r.SalespersonName ?? r.RepName ?? r.SalesRepEmail ?? r.SalesRep ?? ''),
     territory: String(r.Territory ?? r.territory ?? ''),
     billingAddress: String(r.Address ?? r.BillingAddress ?? r.address ?? ''),
     phone: String(r.Phone ?? r.phone ?? ''),
