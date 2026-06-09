@@ -10,6 +10,7 @@ import { calculateNextVisit, getDueDateLabel, getDueDateColor, safeFormat, safeD
 import { sendEmail, isGASConfigured } from '../api/sheets';
 import { sendGmailMessage } from '../api/gmail';
 import { useGmailStore } from '../store/gmailStore';
+import { useSettingsStore } from '../store/settingsStore';
 import GmailAuthButton from './GmailAuthButton';
 
 interface CustomerModalProps {
@@ -41,7 +42,11 @@ const FREQ_OPTIONS = [
 export default function CustomerModal({ customer, onClose }: CustomerModalProps) {
   const { getActivitiesForCustomer, addActivity } = useCustomerStore();
   const { currentUser } = useAuthStore();
-  const { isTokenValid, accessToken, signature } = useGmailStore();
+  const { isTokenValid, accessToken, signature: gmailSig } = useGmailStore();
+  const { signatures, getDefault } = useSettingsStore();
+  const defaultSig = getDefault();
+  // Prefer stored default signature, fall back to Gmail-fetched sig
+  const signature = defaultSig?.body ?? gmailSig ?? null;
   const activities = getActivitiesForCustomer(customer.id);
 
   // Log form state
@@ -55,7 +60,9 @@ export default function CustomerModal({ customer, onClose }: CustomerModalProps)
   const [showCompose, setShowCompose] = useState(false);
   const [emailTo, setEmailTo] = useState(customer.email ?? '');
   const [emailSubject, setEmailSubject] = useState('');
-  const [emailBody, setEmailBody] = useState(signature ? `\n\n--\n${signature}` : '');
+  const [selectedSigId, setSelectedSigId] = useState<string | null>(defaultSig?.id ?? null);
+  const activeSig = signatures.find(s => s.id === selectedSigId)?.body ?? signature ?? null;
+  const [emailBody, setEmailBody] = useState(activeSig ? `\n\n--\n${activeSig}` : '');
   const [emailSending, setEmailSending] = useState(false);
   const [emailSent, setEmailSent] = useState(false);
   const [emailError, setEmailError] = useState('');
@@ -143,7 +150,7 @@ export default function CustomerModal({ customer, onClose }: CustomerModalProps)
       });
       setEmailSent(true);
       setEmailSubject('');
-      setEmailBody(signature ? `\n\n--\n${signature}` : '');
+      setEmailBody(activeSig ? `\n\n--\n${activeSig}` : '');
       setTimeout(() => { setEmailSent(false); setShowCompose(false); }, 2000);
     } catch (err) {
       setEmailError(err instanceof Error ? err.message : 'Failed to send email.');
@@ -322,6 +329,35 @@ export default function CustomerModal({ customer, onClose }: CustomerModalProps)
                       <div className="flex items-center gap-2 p-2 bg-green-50 rounded-lg border border-green-100">
                         <span className="w-2 h-2 rounded-full bg-green-400 flex-shrink-0" />
                         <p className="text-[10px] text-green-700 font-semibold">Sending as {currentUser?.email}</p>
+                      </div>
+                    )}
+                    {signatures.length > 0 && (
+                      <div>
+                        <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1">Signature</label>
+                        <div className="relative">
+                          <select
+                            value={selectedSigId ?? ''}
+                            onChange={e => {
+                              const id = e.target.value || null;
+                              setSelectedSigId(id);
+                              const body = signatures.find(s => s.id === id)?.body ?? null;
+                              // Swap signature block at bottom of compose body
+                              setEmailBody(prev => {
+                                const base = prev.replace(/\n\n--\n[\s\S]*$/, '');
+                                return body ? `${base}\n\n--\n${body}` : base;
+                              });
+                            }}
+                            className="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-700 outline-none appearance-none focus:border-amber-400"
+                          >
+                            <option value="">No signature</option>
+                            {signatures.map(s => (
+                              <option key={s.id} value={s.id}>
+                                {s.name}{s.isDefault ? ' (default)' : ''}
+                              </option>
+                            ))}
+                          </select>
+                          <ChevronDown size={13} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                        </div>
                       </div>
                     )}
                     <div>

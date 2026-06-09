@@ -11,8 +11,9 @@ import Dashboard from './pages/Dashboard';
 import Customers from './pages/Customers';
 import ActivityFeed from './pages/ActivityFeed';
 import QuickLinksPage from './pages/QuickLinksPage';
+import SettingsPage from './pages/SettingsPage';
 
-type Page = 'dashboard' | 'customers' | 'activity' | 'quicklinks';
+type Page = 'dashboard' | 'customers' | 'activity' | 'quicklinks' | 'settings';
 
 function App() {
   const { isAuthenticated } = useAuthStore();
@@ -40,6 +41,7 @@ function App() {
       case 'customers': return <Customers />;
       case 'activity': return <ActivityFeed />;
       case 'quicklinks': return <QuickLinksPage />;
+      case 'settings': return <SettingsPage />;
     }
   };
 

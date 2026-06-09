@@ -1,10 +1,10 @@
 import { type ReactNode, useState } from 'react';
-import { LayoutDashboard, Users, MessageSquare, Link2, LogOut, Bell, Search, RefreshCw, Menu, X, Mail } from 'lucide-react';
+import { LayoutDashboard, Users, MessageSquare, Link2, LogOut, Bell, Search, RefreshCw, Menu, X, Mail, Settings } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import { useCustomerStore } from '../store/customerStore';
 import NotificationCenter from './NotificationCenter';
 
-type Page = 'dashboard' | 'customers' | 'activity' | 'quicklinks';
+type Page = 'dashboard' | 'customers' | 'activity' | 'quicklinks' | 'settings';
 
 interface LayoutProps {
   children: ReactNode;
@@ -17,6 +17,7 @@ const NAV_ITEMS = [
   { id: 'customers' as Page, label: 'Customers', icon: Users },
   { id: 'activity' as Page, label: 'Activity', icon: MessageSquare },
   { id: 'quicklinks' as Page, label: 'Links', icon: Link2 },
+  { id: 'settings' as Page, label: 'Settings', icon: Settings },
 ];
 
 export default function Layout({ children, currentPage, onNavigate }: LayoutProps) {
