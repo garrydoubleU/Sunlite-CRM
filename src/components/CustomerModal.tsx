@@ -6,7 +6,7 @@ import type { Customer, ActivityType } from '../types';
 import { useCustomerStore } from '../store/customerStore';
 import { useAuthStore } from '../store/authStore';
 import { calculateNextVisit, getDueDateLabel, getDueDateColor, safeFormat, safeDaysSince } from '../utils/scheduler';
-import { canViewRevenue } from '../utils/roleGate';
+
 import { sendEmail, isGASConfigured } from '../api/sheets';
 
 interface CustomerModalProps {
@@ -38,7 +38,6 @@ const FREQ_OPTIONS = [
 export default function CustomerModal({ customer, onClose }: CustomerModalProps) {
   const { getActivitiesForCustomer, addActivity } = useCustomerStore();
   const { currentUser } = useAuthStore();
-  const showRevenue = canViewRevenue(currentUser?.role ?? 'field_sales');
   const activities = getActivitiesForCustomer(customer.id);
 
   // Log form state
@@ -416,7 +415,7 @@ export default function CustomerModal({ customer, onClose }: CustomerModalProps)
                 </div>
               </div>
 
-              {/* Financial Performance (admin only) */}
+              {/* Financial Performance */}
               {revenueTable.length > 0 && (
                 <div>
                   <div className="flex items-center justify-between mb-3">
@@ -426,8 +425,32 @@ export default function CustomerModal({ customer, onClose }: CustomerModalProps)
                     </span>
                   </div>
 
-                  {/* Table */}
-                  <div className="overflow-x-auto rounded-xl border border-gray-100 mb-4">
+                  {/* Mobile: year cards stacked */}
+                  <div className="md:hidden space-y-2 mb-4">
+                    {revenueTable.map(([yr, d]) => (
+                      <div key={yr} className={`rounded-xl border p-3 ${yr === currentYear ? 'border-amber-200 bg-amber-50' : 'border-gray-100 bg-gray-50'}`}>
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-sm font-black text-gray-900">{yr}</span>
+                          <span className="text-sm font-black text-amber-600">
+                            ${d.total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </span>
+                        </div>
+                        <div className="grid grid-cols-4 gap-1">
+                          {(['Q1', 'Q2', 'Q3', 'Q4'] as const).map(q => (
+                            <div key={q} className="bg-white rounded-lg p-1.5 text-center border border-gray-100">
+                              <p className="text-[9px] font-bold text-gray-400 uppercase">{q}</p>
+                              <p className="text-[10px] font-bold text-gray-700 mt-0.5">
+                                {d[q] > 0 ? `$${(d[q]/1000).toFixed(1)}k` : '—'}
+                              </p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Desktop: full table */}
+                  <div className="hidden md:block overflow-x-auto rounded-xl border border-gray-100 mb-4">
                     <table className="w-full text-xs">
                       <thead>
                         <tr className="bg-gray-50 border-b border-gray-100">
@@ -444,11 +467,11 @@ export default function CustomerModal({ customer, onClose }: CustomerModalProps)
                           <tr key={yr} className="border-b border-gray-50 last:border-0">
                             <td className="px-3 py-2 font-black text-gray-900">{yr}</td>
                             {(['Q1', 'Q2', 'Q3', 'Q4'] as const).map(q => (
-                              <td key={q} className={`px-3 py-2 text-right text-gray-600 ${!showRevenue ? 'blur-sm select-none' : ''}`}>
+                              <td key={q} className="px-3 py-2 text-right text-gray-600">
                                 {d[q] > 0 ? `$${d[q].toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '$0'}
                               </td>
                             ))}
-                            <td className={`px-3 py-2 text-right font-black text-amber-600 ${!showRevenue ? 'blur-sm select-none' : ''}`}>
+                            <td className="px-3 py-2 text-right font-black text-amber-600">
                               ${d.total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                             </td>
                           </tr>
