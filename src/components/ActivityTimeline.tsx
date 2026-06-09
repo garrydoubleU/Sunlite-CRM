@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Phone, MapPin, FileText, Mail, Plus, Trash2, Edit3, Check } from 'lucide-react';
-import { format, parseISO } from 'date-fns';
+import { safeFormat } from '../utils/scheduler';
 import type { ActivityType } from '../types';
 import { useCustomerStore } from '../store/customerStore';
 import { useAuthStore } from '../store/authStore';
@@ -147,7 +147,7 @@ export default function ActivityTimeline({ customerId }: ActivityTimelineProps) 
                 ) : (
                   <p className="text-xs text-gray-600 mt-0.5 leading-relaxed">{activity.summary}</p>
                 )}
-                <p className="text-[10px] text-gray-400 mt-1">{format(parseISO(activity.date), 'MMM d, yyyy h:mm a')}</p>
+                <p className="text-[10px] text-gray-400 mt-1">{safeFormat(activity.date, 'MMM d, yyyy h:mm a')}</p>
               </div>
             </div>
           );

@@ -1,10 +1,10 @@
 import { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { X, MapPin, Phone, Mail, Calendar, Clock, Plus, ChevronDown, FileText, PhoneCall, Navigation, Star } from 'lucide-react';
-import { format, parseISO, differenceInDays } from 'date-fns';
 import type { Customer, ActivityType } from '../types';
 import { useCustomerStore } from '../store/customerStore';
 import { useAuthStore } from '../store/authStore';
-import { calculateNextVisit, getDueDateLabel, getDueDateColor } from '../utils/scheduler';
+import { calculateNextVisit, getDueDateLabel, getDueDateColor, safeFormat, safeDaysSince } from '../utils/scheduler';
 import { canViewRevenue } from '../utils/roleGate';
 
 interface CustomerModalProps {
@@ -47,7 +47,7 @@ export default function CustomerModal({ customer, onClose }: CustomerModalProps)
   const [saved, setSaved] = useState(false);
 
   const nextVisit = calculateNextVisit(customer.lastContactDate, customer.visitFrequency, customer.dayOfWeek);
-  const daysAgo = differenceInDays(new Date(), parseISO(customer.lastContactDate));
+  const daysAgo = safeDaysSince(customer.lastContactDate);
   const tier = TIER_COLORS[customer.priorityTier];
 
   const handleSave = async () => {
@@ -70,7 +70,7 @@ export default function CustomerModal({ customer, onClose }: CustomerModalProps)
     setTimeout(() => setSaved(false), 2000);
   };
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center p-0 md:p-4">
       {/* Backdrop */}
       <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
@@ -131,7 +131,7 @@ export default function CustomerModal({ customer, onClose }: CustomerModalProps)
                 <span className="text-xs font-bold text-white">{daysAgo}d ago</span>
               </div>
               <p className="text-[10px] text-blue-200 mt-0.5">
-                {format(parseISO(customer.lastContactDate), 'M/d/yyyy')}
+                {safeFormat(customer.lastContactDate, 'M/d/yyyy')}
               </p>
             </div>
             <div className="bg-white/10 rounded-xl p-2.5">
@@ -191,7 +191,7 @@ export default function CustomerModal({ customer, onClose }: CustomerModalProps)
                     <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1.5">Route Commencement Date</label>
                     <input
                       type="date"
-                      defaultValue={format(parseISO(customer.lastContactDate), 'yyyy-MM-dd')}
+                      defaultValue={safeFormat(customer.lastContactDate, 'yyyy-MM-dd', '')}
                       className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm text-gray-700 outline-none focus:border-amber-400 transition-colors"
                     />
                   </div>
@@ -201,7 +201,7 @@ export default function CustomerModal({ customer, onClose }: CustomerModalProps)
                 <div className="mt-3 p-3 bg-gray-50 rounded-xl border border-gray-100 flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <Clock size={13} className="text-gray-400" />
-                    <span className="text-xs text-gray-600">Next visit: <span className="font-bold text-gray-800">{format(nextVisit, 'EEE, MMM d yyyy')}</span></span>
+                    <span className="text-xs text-gray-600">Next visit: <span className="font-bold text-gray-800">{safeFormat(nextVisit.toISOString(), 'EEE, MMM d yyyy')}</span></span>
                   </div>
                   <span className={`text-[10px] font-black px-2.5 py-1 rounded-full uppercase ${getDueDateColor(nextVisit)}`}>
                     {getDueDateLabel(nextVisit)}
@@ -316,7 +316,7 @@ export default function CustomerModal({ customer, onClose }: CustomerModalProps)
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center justify-between mb-0.5">
                           <span className="text-[10px] font-bold text-gray-500 uppercase">{activity.type}</span>
-                          <span className="text-[10px] text-gray-400">{format(parseISO(activity.date), 'MMM d')}</span>
+                          <span className="text-[10px] text-gray-400">{safeFormat(activity.date, 'MMM d')}</span>
                         </div>
                         <p className="text-xs text-gray-700 leading-relaxed">{activity.summary}</p>
                         <p className="text-[10px] text-gray-400 mt-0.5">{activity.repName}</p>
@@ -329,6 +329,7 @@ export default function CustomerModal({ customer, onClose }: CustomerModalProps)
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

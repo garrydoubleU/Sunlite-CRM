@@ -1,5 +1,27 @@
-import { addDays, getDay, parseISO, differenceInDays } from 'date-fns';
+import { addDays, getDay, parseISO, differenceInDays, format, isValid } from 'date-fns';
 import type { VisitFrequency } from '../types';
+
+/** Never throws — returns fallback string when date is missing or invalid */
+export function safeFormat(dateStr: string | undefined | null, fmt: string, fallback = '—'): string {
+  if (!dateStr) return fallback;
+  try {
+    const d = parseISO(dateStr);
+    return isValid(d) ? format(d, fmt) : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+/** Never throws — returns NaN-safe day difference */
+export function safeDaysSince(dateStr: string | undefined | null): number {
+  if (!dateStr) return 0;
+  try {
+    const d = parseISO(dateStr);
+    return isValid(d) ? differenceInDays(new Date(), d) : 0;
+  } catch {
+    return 0;
+  }
+}
 
 export function calculateNextVisit(lastVisitDate: string, frequency: VisitFrequency, _dayOfWeek: number): Date {
   // Guard against empty/invalid date strings

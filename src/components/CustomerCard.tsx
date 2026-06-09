@@ -2,9 +2,9 @@ import { useState } from 'react';
 import { ChevronDown, ChevronUp, MapPin, Phone, Mail, Package, Calendar } from 'lucide-react';
 import type { Customer } from '../types';
 import ActivityTimeline from './ActivityTimeline';
-import { differenceInDays, parseISO, format } from 'date-fns';
 import { canViewRevenue } from '../utils/roleGate';
 import { useAuthStore } from '../store/authStore';
+import { safeFormat, safeDaysSince } from '../utils/scheduler';
 
 interface CustomerCardProps {
   customer: Customer;
@@ -29,7 +29,7 @@ export default function CustomerCard({ customer, onOpenModal }: CustomerCardProp
   const { currentUser } = useAuthStore();
   const showRevenue = canViewRevenue(currentUser?.role ?? 'field_sales');
 
-  const daysSinceContact = differenceInDays(new Date(), parseISO(customer.lastContactDate));
+  const daysSinceContact = safeDaysSince(customer.lastContactDate);
   const isUntouched = daysSinceContact >= 30;
 
   return (
@@ -89,7 +89,7 @@ export default function CustomerCard({ customer, onOpenModal }: CustomerCardProp
             </div>
           ) : (
             <div className="bg-gray-50 rounded-lg p-2">
-              <p className="text-xs font-bold text-gray-800">{format(parseISO(customer.lastContactDate), 'MMM d')}</p>
+              <p className="text-xs font-bold text-gray-800">{safeFormat(customer.lastContactDate, 'MMM d')}</p>
               <p className="text-[10px] text-gray-400">Last Contact</p>
             </div>
           )}
@@ -136,7 +136,7 @@ export default function CustomerCard({ customer, onOpenModal }: CustomerCardProp
             </div>
             <div className="flex items-center gap-2 text-xs text-gray-600">
               <Calendar size={12} className="text-gray-400" />
-              Last contact: {format(parseISO(customer.lastContactDate), 'MMMM d, yyyy')}
+              Last contact: {safeFormat(customer.lastContactDate, 'MMMM d, yyyy')}
             </div>
           </div>
           <ActivityTimeline customerId={customer.id} />
