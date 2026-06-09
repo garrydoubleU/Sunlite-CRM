@@ -178,7 +178,7 @@ export default function Layout({ children, currentPage, onNavigate }: LayoutProp
         </header>
 
         {/* Page content — extra bottom padding on mobile for tab bar */}
-        <main className="flex-1 overflow-auto p-3 md:p-6 pb-24 md:pb-6">
+        <main className="flex-1 overflow-auto overflow-x-hidden p-3 md:p-6 pb-24 md:pb-6 min-w-0">
           {children}
         </main>
       </div>

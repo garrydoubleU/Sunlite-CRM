@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { createPortal } from 'react-dom';
-import { X, MapPin, Phone, Mail, Calendar, Clock, Plus, ChevronDown, FileText, PhoneCall, Navigation, Star, Send } from 'lucide-react';
+import { X, Phone, Mail, Calendar, Clock, Plus, ChevronDown, FileText, PhoneCall, Navigation, Star, Send } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import type { Customer, ActivityType } from '../types';
 import { useCustomerStore } from '../store/customerStore';
@@ -137,40 +137,34 @@ export default function CustomerModal({ customer, onClose }: CustomerModalProps)
   };
 
   return createPortal(
-    <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center p-0 md:p-4">
+    <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center p-0 md:p-4" style={{maxWidth: '100vw'}}>
       {/* Backdrop */}
       <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
 
       {/* Modal */}
-      <div className="relative w-full md:max-w-4xl bg-white md:rounded-2xl shadow-2xl flex flex-col max-h-[95vh] md:max-h-[90vh] rounded-t-2xl overflow-hidden">
+      <div className="relative w-full md:max-w-4xl bg-white md:rounded-2xl shadow-2xl flex flex-col max-h-[95vh] md:max-h-[90vh] rounded-t-2xl overflow-hidden" style={{maxWidth: '100vw'}}>
 
         {/* Header */}
         <div className="bg-[#0F2A4A] px-5 py-4 flex-shrink-0">
-          <div className="flex items-start justify-between">
-            <div>
-              <div className="flex items-center gap-2 mb-1">
+          <div className="flex items-start justify-between gap-2 min-w-0">
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2 mb-1 flex-wrap">
                 <span className="text-[10px] font-bold text-amber-400 uppercase tracking-[0.15em]">Sunlite Account</span>
                 <span className="text-[10px] text-blue-300">·</span>
                 <span className="text-[10px] font-mono text-blue-300">{customer.id}</span>
               </div>
-              <h2 className="text-xl md:text-2xl font-black text-white leading-tight">{customer.name}</h2>
-              <div className="flex flex-wrap items-center gap-3 mt-1.5">
-                {customer.billingAddress && (
-                  <div className="flex items-center gap-1 text-blue-200 text-xs">
-                    <MapPin size={11} />
-                    <span>{customer.billingAddress}</span>
-                  </div>
-                )}
+              <h2 className="text-lg md:text-2xl font-black text-white leading-tight break-words">{customer.name}</h2>
+              <div className="flex flex-col gap-1 mt-1.5">
                 {customer.phone && (
                   <a href={`tel:${customer.phone}`} className="flex items-center gap-1 text-blue-200 text-xs hover:text-white">
-                    <Phone size={11} />
-                    <span>{customer.phone}</span>
+                    <Phone size={11} className="flex-shrink-0" />
+                    <span className="truncate">{customer.phone}</span>
                   </a>
                 )}
                 {customer.email && (
                   <a href={`mailto:${customer.email}`} className="flex items-center gap-1 text-blue-200 text-xs hover:text-white">
-                    <Mail size={11} />
-                    <span>{customer.email}</span>
+                    <Mail size={11} className="flex-shrink-0" />
+                    <span className="truncate">{customer.email}</span>
                   </a>
                 )}
               </div>
@@ -229,11 +223,11 @@ export default function CustomerModal({ customer, onClose }: CustomerModalProps)
         </div>
 
         {/* Body */}
-        <div className="flex-1 overflow-auto">
-          <div className="flex flex-col md:flex-row min-h-0">
+        <div className="flex-1 overflow-auto overflow-x-hidden">
+          <div className="flex flex-col md:flex-row min-h-0 w-full">
 
             {/* Left column */}
-            <div className="flex-1 p-4 md:p-5 space-y-5 md:border-r border-gray-100">
+            <div className="flex-1 min-w-0 p-4 md:p-5 space-y-5 md:border-r border-gray-100 overflow-hidden">
 
               {/* Field Visit Schedule — only for weekly/biweekly accounts */}
               {showVisitSchedule && <div>
@@ -509,7 +503,7 @@ export default function CustomerModal({ customer, onClose }: CustomerModalProps)
             </div>
 
             {/* Right column — Recent Activity */}
-            <div className="w-full md:w-72 p-4 md:p-5 bg-gray-50 flex-shrink-0">
+            <div className="w-full md:w-72 min-w-0 p-4 md:p-5 bg-gray-50 flex-shrink-0 overflow-hidden">
               <p className="text-xs font-black text-gray-800 uppercase tracking-wider mb-1">Recent Activity</p>
               <p className="text-[10px] text-gray-400 mb-4">Complete interaction timeline for this account.</p>
 
