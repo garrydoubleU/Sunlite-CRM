@@ -2,7 +2,9 @@ import { addDays, getDay, parseISO, differenceInDays } from 'date-fns';
 import type { VisitFrequency } from '../types';
 
 export function calculateNextVisit(lastVisitDate: string, frequency: VisitFrequency, _dayOfWeek: number): Date {
-  const last = parseISO(lastVisitDate);
+  // Guard against empty/invalid date strings
+  const parsed = lastVisitDate ? parseISO(lastVisitDate) : new Date();
+  const last = isNaN(parsed.getTime()) ? new Date() : parsed;
   let candidate: Date;
 
   if (frequency === 'weekly') {

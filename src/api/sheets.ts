@@ -97,6 +97,13 @@ export interface GASCustomer {
   dayOfWeek: number;
 }
 
+// Safe date parser — never throws, returns fallback ISO string
+function safeDate(val: unknown, fallback = new Date().toISOString()): string {
+  if (!val || val === '' || val === 'null' || val === 'undefined') return fallback;
+  const d = new Date(String(val));
+  return isNaN(d.getTime()) ? fallback : d.toISOString();
+}
+
 // Their getCustomers returns objects with these normalized keys:
 //   ID, Customer (or CustomerName), SalesRep (email), SalespersonName,
 //   LastOrderDate, VisitFrequency, VisitStartDate, Priority, revenue cols Q1_2023 etc.
@@ -137,7 +144,7 @@ function mapRawCustomer(r: Record<string, unknown>): GASCustomer {
     priorityTier: tier as 1 | 2 | 3 | 4,
     customerClass: String(r.Category ?? r.CustomerClass ?? r.Type ?? ''),
     visitFrequency: freq,
-    lastContactDate: String(r.LastOrderDate ?? r.LastContact ?? r.VisitStartDate ?? new Date().toISOString()),
+    lastContactDate: safeDate(r.LastOrderDate ?? r.LastContact ?? r.VisitStartDate),
     activeStatus: String(r.Status ?? r.status ?? 'active').toLowerCase() !== 'inactive',
     openOrderCount: Number(r.OpenOrders ?? r.openOrders ?? 0),
     revenue,
@@ -183,7 +190,7 @@ function mapRawLog(r: Record<string, unknown>, idx: number): GASActivity {
     id: String(r.ID ?? r.id ?? `log_${idx}`),
     customerId: customerID || customerName, // we'll resolve by name in store
     type: typeMap[logType] ?? 'note',
-    date: r.Timestamp ? new Date(String(r.Timestamp)).toISOString() : new Date().toISOString(),
+    date: safeDate(r.Timestamp),
     repName: String(r.UserEmail ?? r.userEmail ?? r.RepName ?? ''),
     summary: String(r.Notes ?? r.notes ?? r.Summary ?? ''),
     source: 'manual',
