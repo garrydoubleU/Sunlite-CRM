@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { Phone, MapPin, FileText, Mail, Plus, Trash2, Edit3, Check } from 'lucide-react';
-import { safeFormat } from '../utils/scheduler';
+import { Phone, MapPin, FileText, Mail, Plus, Trash2, Edit3, Check, ArrowUpRight, ArrowDownLeft } from 'lucide-react';
+import { safeFormat, parseEmailSummary } from '../utils/scheduler';
 import type { ActivityType } from '../types';
 import { useCustomerStore } from '../store/customerStore';
 import { useAuthStore } from '../store/authStore';
@@ -144,9 +144,33 @@ export default function ActivityTimeline({ customerId }: ActivityTimelineProps) 
                       <button onClick={() => setEditingId(null)} className="text-[10px] font-semibold text-gray-500 px-2 py-1 rounded hover:bg-gray-100">Cancel</button>
                     </div>
                   </div>
-                ) : (
-                  <p className="text-xs text-gray-600 mt-0.5 leading-relaxed">{activity.summary}</p>
-                )}
+                ) : (() => {
+                  const email = activity.type === 'email' ? parseEmailSummary(activity.summary) : null;
+                  if (email) {
+                    return (
+                      <div className="mt-1 bg-gray-50 rounded-lg border border-gray-100 overflow-hidden">
+                        <div className="flex items-center gap-1.5 px-2 py-1 bg-white border-b border-gray-100">
+                          {email.direction === 'sent'
+                            ? <ArrowUpRight size={10} className="text-blue-400 flex-shrink-0" />
+                            : <ArrowDownLeft size={10} className="text-green-500 flex-shrink-0" />}
+                          <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wide">
+                            {email.direction === 'sent' ? 'Sent' : 'Received'}
+                          </span>
+                          {email.address && (
+                            <span className="text-[10px] text-gray-400 truncate">{email.address}</span>
+                          )}
+                        </div>
+                        <div className="px-2 py-1.5">
+                          <p className="text-xs font-semibold text-gray-800 leading-snug">{email.subject}</p>
+                          {email.body && (
+                            <p className="text-[11px] text-gray-500 mt-0.5 leading-relaxed line-clamp-2">{email.body}</p>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  }
+                  return <p className="text-xs text-gray-600 mt-0.5 leading-relaxed">{activity.summary}</p>;
+                })()}
                 <p className="text-[10px] text-gray-400 mt-1">{safeFormat(activity.date, 'MMM d, yyyy h:mm a')}</p>
               </div>
             </div>

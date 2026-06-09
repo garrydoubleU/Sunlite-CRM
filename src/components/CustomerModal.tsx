@@ -1,11 +1,11 @@
 import { useState, useMemo } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Phone, Mail, Calendar, Clock, Plus, ChevronDown, FileText, PhoneCall, Navigation, Star, Send } from 'lucide-react';
+import { X, Phone, Mail, Calendar, Clock, Plus, ChevronDown, FileText, PhoneCall, Navigation, Star, Send, ArrowUpRight, ArrowDownLeft } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import type { Customer, ActivityType } from '../types';
 import { useCustomerStore } from '../store/customerStore';
 import { useAuthStore } from '../store/authStore';
-import { calculateNextVisit, getDueDateLabel, getDueDateColor, safeFormat, safeDaysSince } from '../utils/scheduler';
+import { calculateNextVisit, getDueDateLabel, getDueDateColor, safeFormat, safeDaysSince, parseEmailSummary } from '../utils/scheduler';
 
 import { sendEmail, isGASConfigured } from '../api/sheets';
 import { sendGmailMessage } from '../api/gmail';
@@ -554,7 +554,27 @@ export default function CustomerModal({ customer, onClose }: CustomerModalProps)
                           <span className="text-[10px] font-bold text-gray-500 uppercase">{activity.type}</span>
                           <span className="text-[10px] text-gray-400">{safeFormat(activity.date, 'MMM d')}</span>
                         </div>
-                        <p className="text-xs text-gray-700 leading-relaxed">{activity.summary}</p>
+                        {(() => {
+                          const email = activity.type === 'email' ? parseEmailSummary(activity.summary) : null;
+                          if (email) return (
+                            <div className="mt-0.5 bg-white rounded-lg border border-gray-200 overflow-hidden">
+                              <div className="flex items-center gap-1 px-2 py-0.5 bg-gray-50 border-b border-gray-100">
+                                {email.direction === 'sent'
+                                  ? <ArrowUpRight size={9} className="text-blue-400 flex-shrink-0" />
+                                  : <ArrowDownLeft size={9} className="text-green-500 flex-shrink-0" />}
+                                <span className="text-[9px] font-bold text-gray-400 uppercase">
+                                  {email.direction === 'sent' ? 'Sent' : 'Received'}
+                                </span>
+                                {email.address && <span className="text-[9px] text-gray-400 truncate">{email.address}</span>}
+                              </div>
+                              <div className="px-2 py-1">
+                                <p className="text-[11px] font-semibold text-gray-800 leading-snug">{email.subject}</p>
+                                {email.body && <p className="text-[10px] text-gray-500 mt-0.5 line-clamp-2 leading-relaxed">{email.body}</p>}
+                              </div>
+                            </div>
+                          );
+                          return <p className="text-xs text-gray-700 leading-relaxed">{activity.summary}</p>;
+                        })()}
                         <p className="text-[10px] text-gray-400 mt-0.5">{activity.repName}</p>
                       </div>
                     </div>

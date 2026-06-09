@@ -1,6 +1,55 @@
 import { addDays, getDay, parseISO, differenceInDays, format, isValid } from 'date-fns';
 import type { VisitFrequency } from '../types';
 
+// Parse structured email summaries stored by GAS into subject + body + metadata.
+// Handles formats:
+//   "[Email sent] Subject\nbody..."
+//   "[Gmail to: addr] Subject\nbody..."
+//   "[Gmail from: addr] Subject\nbody..."
+export interface ParsedEmail {
+  direction: 'sent' | 'received' | null;
+  address: string | null;
+  subject: string;
+  body: string;
+}
+
+export function parseEmailSummary(summary: string): ParsedEmail | null {
+  if (!summary) return null;
+  const tagMatch = summary.match(/^\[([^\]]+)\]\s*/);
+  if (!tagMatch) return null;
+
+  const tag = tagMatch[1].toLowerCase();
+  let direction: ParsedEmail['direction'] = null;
+  let address: string | null = null;
+
+  if (tag.startsWith('gmail from:') || tag.startsWith('email from:')) {
+    direction = 'received';
+    address = tagMatch[1].replace(/^[^:]+:\s*/i, '').trim();
+  } else if (tag.startsWith('gmail to:') || tag.startsWith('email to:')) {
+    direction = 'sent';
+    address = tagMatch[1].replace(/^[^:]+:\s*/i, '').trim();
+  } else if (tag.includes('email sent') || tag.includes('sent')) {
+    direction = 'sent';
+  } else {
+    return null;
+  }
+
+  const rest = summary.slice(tagMatch[0].length);
+  const nlIdx = rest.indexOf('\n');
+  let subject: string;
+  let body: string;
+  if (nlIdx !== -1) {
+    subject = rest.slice(0, nlIdx).trim();
+    body = rest.slice(nlIdx + 1).trim();
+  } else {
+    const colonIdx = rest.indexOf(': ');
+    subject = colonIdx !== -1 ? rest.slice(0, colonIdx).trim() : rest.trim();
+    body = colonIdx !== -1 ? rest.slice(colonIdx + 2).trim() : '';
+  }
+
+  return { direction, address, subject, body };
+}
+
 /** Never throws — returns fallback string when date is missing or invalid */
 export function safeFormat(dateStr: string | undefined | null, fmt: string, fallback = '—'): string {
   if (!dateStr) return fallback;
