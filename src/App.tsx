@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { AnimatePresence } from 'framer-motion';
 import { Toaster } from 'react-hot-toast';
 import { Sparkles } from 'lucide-react';
 import { useAuthStore } from './store/authStore';
+import { useCustomerStore } from './store/customerStore';
 import Layout from './components/Layout';
 import AIAssistant from './components/AIAssistant';
 import Login from './pages/Login';
@@ -15,6 +16,12 @@ type Page = 'dashboard' | 'customers' | 'activity' | 'quicklinks';
 
 function App() {
   const { isAuthenticated } = useAuthStore();
+  const { loadFromGAS } = useCustomerStore();
+
+  // Load live data from Google Sheets on login
+  useEffect(() => {
+    if (isAuthenticated) loadFromGAS();
+  }, [isAuthenticated]);
   const [currentPage, setCurrentPage] = useState<Page>('dashboard');
   const [aiOpen, setAiOpen] = useState(false);
 
