@@ -2,7 +2,8 @@ import { useState, useMemo } from 'react';
 import { Search, X } from 'lucide-react';
 import { useCustomerStore } from '../store/customerStore';
 import CustomerCard from '../components/CustomerCard';
-import type { VisitFrequency } from '../types';
+import CustomerModal from '../components/CustomerModal';
+import type { Customer, VisitFrequency } from '../types';
 
 type TierFilter = 'all' | '1' | '2' | '3' | '4';
 type FreqFilter = 'all' | VisitFrequency;
@@ -13,6 +14,7 @@ export default function Customers() {
   const [tierFilter, setTierFilter] = useState<TierFilter>('all');
   const [freqFilter, setFreqFilter] = useState<FreqFilter>('all');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
+  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
 
   const filtered = useMemo(() => {
     return customers.filter(c => {
@@ -126,9 +128,12 @@ export default function Customers() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {filtered.map(c => (
-            <CustomerCard key={c.id} customer={c} />
+            <CustomerCard key={c.id} customer={c} onOpenModal={() => setSelectedCustomer(c)} />
           ))}
         </div>
+      )}
+      {selectedCustomer && (
+        <CustomerModal customer={selectedCustomer} onClose={() => setSelectedCustomer(null)} />
       )}
     </div>
   );

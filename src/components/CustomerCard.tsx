@@ -8,6 +8,7 @@ import { useAuthStore } from '../store/authStore';
 
 interface CustomerCardProps {
   customer: Customer;
+  onOpenModal?: () => void;
 }
 
 const TIER_COLORS: Record<number, string> = {
@@ -23,7 +24,7 @@ const FREQ_COLORS: Record<string, string> = {
   monthly: 'bg-green-100 text-green-600',
 };
 
-export default function CustomerCard({ customer }: CustomerCardProps) {
+export default function CustomerCard({ customer, onOpenModal }: CustomerCardProps) {
   const [expanded, setExpanded] = useState(false);
   const { currentUser } = useAuthStore();
   const showRevenue = canViewRevenue(currentUser?.role ?? 'field_sales');
@@ -95,13 +96,23 @@ export default function CustomerCard({ customer }: CustomerCardProps) {
         </div>
       </div>
 
-      {/* Expand button */}
-      <button
-        onClick={() => setExpanded(!expanded)}
-        className="w-full px-4 py-2 border-t border-gray-50 flex items-center justify-center gap-1 text-xs font-medium text-gray-400 hover:text-amber-500 hover:bg-amber-50 transition-colors rounded-b-2xl"
-      >
-        {expanded ? <><ChevronUp size={14} /> Less detail</> : <><ChevronDown size={14} /> More detail</>}
-      </button>
+      {/* Action buttons */}
+      <div className="flex border-t border-gray-50">
+        {onOpenModal && (
+          <button
+            onClick={onOpenModal}
+            className="flex-1 px-4 py-2 flex items-center justify-center gap-1 text-xs font-semibold text-amber-600 hover:bg-amber-50 transition-colors"
+          >
+            Open Record
+          </button>
+        )}
+        <button
+          onClick={() => setExpanded(!expanded)}
+          className={`flex-1 px-4 py-2 flex items-center justify-center gap-1 text-xs font-medium text-gray-400 hover:text-amber-500 hover:bg-amber-50 transition-colors ${expanded ? '' : 'rounded-b-2xl'} ${onOpenModal ? 'border-l border-gray-50' : 'rounded-b-2xl'}`}
+        >
+          {expanded ? <><ChevronUp size={14} /> Less</> : <><ChevronDown size={14} /> More</>}
+        </button>
+      </div>
 
       {/* Expanded detail */}
       {expanded && (
