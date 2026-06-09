@@ -14,7 +14,10 @@ interface GmailState {
   isTokenValid: () => boolean;
 }
 
-// Token is stored in memory only — never persisted to localStorage
+const GMAIL_AUTH_KEY = 'sunlite-gmail-authorized';
+
+// Token lives in memory; authorization state persists in localStorage so we
+// can silently re-acquire the token on next page load without a popup.
 export const useGmailStore = create<GmailState>((set, get) => ({
   accessToken: null,
   tokenExpiry: null,
@@ -22,18 +25,22 @@ export const useGmailStore = create<GmailState>((set, get) => ({
   isAuthorizing: false,
   authError: null,
 
-  setToken: (token, expiresIn) =>
+  setToken: (token, expiresIn) => {
+    localStorage.setItem(GMAIL_AUTH_KEY, '1');
     set({
       accessToken: token,
       tokenExpiry: Date.now() + expiresIn * 1000 - 60_000, // 1-min buffer
       authError: null,
       isAuthorizing: false,
-    }),
+    });
+  },
 
   setSignature: (sig) => set({ signature: sig }),
 
-  clearToken: () =>
-    set({ accessToken: null, tokenExpiry: null, signature: null, authError: null }),
+  clearToken: () => {
+    localStorage.removeItem(GMAIL_AUTH_KEY);
+    set({ accessToken: null, tokenExpiry: null, signature: null, authError: null });
+  },
 
   setAuthorizing: (v) => set({ isAuthorizing: v }),
   setError: (msg) => set({ authError: msg, isAuthorizing: false }),
@@ -43,3 +50,7 @@ export const useGmailStore = create<GmailState>((set, get) => ({
     return Boolean(accessToken && tokenExpiry && Date.now() < tokenExpiry);
   },
 }));
+
+export function hasPreviousGmailAuth(): boolean {
+  return localStorage.getItem(GMAIL_AUTH_KEY) === '1';
+}

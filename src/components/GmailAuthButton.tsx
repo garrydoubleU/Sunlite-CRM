@@ -1,6 +1,6 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useCallback } from 'react';
 import { Mail } from 'lucide-react';
-import { useGmailStore } from '../store/gmailStore';
+import { useGmailStore, hasPreviousGmailAuth } from '../store/gmailStore';
 import { fetchGmailSignature } from '../api/gmail';
 
 declare global {
@@ -11,8 +11,9 @@ declare global {
           initTokenClient: (config: {
             client_id: string;
             scope: string;
+            prompt?: string;
             callback: (resp: { access_token: string; expires_in: number; error?: string }) => void;
-          }) => { requestAccessToken: () => void };
+          }) => { requestAccessToken: (opts?: { prompt?: string }) => void };
         };
       };
     };
@@ -30,31 +31,77 @@ interface Props {
 }
 
 export default function GmailAuthButton({ onAuthorized }: Props) {
-  const { isTokenValid, setToken, setSignature, setError, setAuthorizing, isAuthorizing } = useGmailStore();
-  const clientRef = useRef<{ requestAccessToken: () => void } | null>(null);
+  const { isTokenValid, setToken, setSignature, clearToken, setError, setAuthorizing, isAuthorizing } = useGmailStore();
+  const clientRef = useRef<{ requestAccessToken: (opts?: { prompt?: string }) => void } | null>(null);
+
+  const handleTokenResponse = useCallback(async (
+    resp: { access_token: string; expires_in: number; error?: string },
+    silent = false
+  ) => {
+    if (resp.error) {
+      if (silent) {
+        // Silent re-auth failed (e.g. session expired) — clear flag so button shows
+        clearToken();
+      } else {
+        setError(resp.error);
+      }
+      return;
+    }
+    setToken(resp.access_token, resp.expires_in);
+    fetchGmailSignature(resp.access_token).then(sig => {
+      if (sig) setSignature(sig);
+    }).catch(() => {});
+    onAuthorized?.();
+  }, [setToken, setSignature, clearToken, setError, onAuthorized]);
 
   useEffect(() => {
-    if (!CLIENT_ID || !window.google) return;
+    if (!CLIENT_ID) return;
+
+    // GIS may not be loaded yet — wait for it
+    const init = () => {
+      if (!window.google) return;
+      clientRef.current = window.google.accounts.oauth2.initTokenClient({
+        client_id: CLIENT_ID,
+        scope: SCOPE,
+        callback: (resp) => handleTokenResponse(resp, false),
+      });
+
+      // If user previously authorized, silently re-acquire token (no popup)
+      if (hasPreviousGmailAuth() && !isTokenValid()) {
+        const silentClient = window.google.accounts.oauth2.initTokenClient({
+          client_id: CLIENT_ID,
+          scope: SCOPE,
+          callback: (resp) => handleTokenResponse(resp, true),
+        });
+        silentClient.requestAccessToken({ prompt: '' });
+      }
+    };
+
+    if (window.google) {
+      init();
+    } else {
+      // Script loads async — poll briefly
+      const t = setInterval(() => {
+        if (window.google) { clearInterval(t); init(); }
+      }, 200);
+      return () => clearInterval(t);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Re-run handler changes without re-triggering silent auth
+  useEffect(() => {
+    if (!clientRef.current || !window.google || !CLIENT_ID) return;
     clientRef.current = window.google.accounts.oauth2.initTokenClient({
       client_id: CLIENT_ID,
       scope: SCOPE,
-      callback: async (resp) => {
-        if (resp.error) {
-          setError(resp.error);
-          return;
-        }
-        setToken(resp.access_token, resp.expires_in);
-        // Fetch signature in background — non-blocking
-        fetchGmailSignature(resp.access_token).then(sig => {
-          if (sig) setSignature(sig);
-        }).catch(() => {});
-        onAuthorized?.();
-      },
+      callback: (resp) => handleTokenResponse(resp, false),
     });
-  }, [setToken, setSignature, setError, onAuthorized]);
+  }, [handleTokenResponse]);
 
   if (!CLIENT_ID) return null;
   if (isTokenValid()) return null;
+  if (hasPreviousGmailAuth() && !isTokenValid()) return null; // silently re-authing
 
   const handleClick = () => {
     if (!clientRef.current) {
@@ -62,7 +109,7 @@ export default function GmailAuthButton({ onAuthorized }: Props) {
       return;
     }
     setAuthorizing(true);
-    clientRef.current.requestAccessToken();
+    clientRef.current.requestAccessToken({ prompt: 'consent' });
   };
 
   return (
