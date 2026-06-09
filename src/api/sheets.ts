@@ -1,7 +1,8 @@
 // ── Google Apps Script middleware layer ───────────────────────
-// All reads → GET ?action=xxx
-// All writes → POST with JSON body { action, ...fields }
-// Set VITE_GAS_URL in .env to your deployed Apps Script URL
+// Matches the existing Sunshine Lighting CRM Apps Script format exactly.
+// Their login uses ?userEmail=&password=  and returns { status, userRole, userName }
+// Their getCustomers returns flat objects with normalized keys (Customer, ID, SalesRep, etc.)
+// Their getLogs returns objects with whitespace-stripped header keys
 
 const GAS_URL = import.meta.env.VITE_GAS_URL as string | undefined;
 
@@ -11,28 +12,23 @@ export function isGASConfigured(): boolean {
 
 // ── Generic helpers ───────────────────────────────────────────
 
-async function gasGet<T>(action: string, params: Record<string, string> = {}): Promise<T[]> {
+async function gasGet<T>(action: string, params: Record<string, string> = {}): Promise<T> {
   if (!GAS_URL) throw new Error('VITE_GAS_URL is not configured');
   const url = new URL(GAS_URL);
   url.searchParams.set('action', action);
   Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v));
   const res = await fetch(url.toString());
-  const json = await res.json();
-  if (json.error) throw new Error(`[GAS:${action}] ${json.error}`);
-  return json.data ?? [];
+  return res.json() as Promise<T>;
 }
 
-async function gasPost<T = { success: boolean }>(body: Record<string, unknown>): Promise<T> {
+// GAS doPost reads e.postData.contents — send as text/plain to skip preflight
+async function gasPost<T = { status: string }>(params: Record<string, string>): Promise<T> {
   if (!GAS_URL) throw new Error('VITE_GAS_URL is not configured');
-  const res = await fetch(GAS_URL, {
-    method: 'POST',
-    // GAS doPost requires text/plain (not application/json) to avoid CORS preflight
-    headers: { 'Content-Type': 'text/plain' },
-    body: JSON.stringify(body),
-  });
-  const json = await res.json();
-  if (json.error) throw new Error(`[GAS:${String(body.action)}] ${json.error}`);
-  return json as T;
+  // Build as URL params appended to the GAS URL (their doPost falls back to doGet params)
+  const url = new URL(GAS_URL);
+  Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v));
+  const res = await fetch(url.toString());
+  return res.json() as Promise<T>;
 }
 
 // ── Auth ──────────────────────────────────────────────────────
@@ -46,16 +42,38 @@ export interface GASUser {
   avatarInitials: string;
 }
 
+// Maps their role strings to our Role type
+function normalizeRole(role: string): GASUser['role'] {
+  const r = role?.toLowerCase().trim() ?? '';
+  if (r === 'admin' || r === 'administrator') return 'admin';
+  if (r.includes('field')) return 'field_sales';
+  if (r.includes('inside')) return 'inside_sales';
+  if (r.includes('service') || r.includes('cs') || r.includes('support')) return 'customer_service';
+  return 'field_sales'; // default
+}
+
+// Their login returns: { status: "Success", userRole, userName }
 export async function loginUser(email: string, password: string): Promise<GASUser> {
   if (!GAS_URL) throw new Error('VITE_GAS_URL is not configured');
   const url = new URL(GAS_URL);
   url.searchParams.set('action', 'login');
-  url.searchParams.set('email', email.toLowerCase().trim());
+  url.searchParams.set('userEmail', email.toLowerCase().trim()); // their param name
   url.searchParams.set('password', password);
   const res = await fetch(url.toString());
   const json = await res.json();
-  if (!json.success) throw new Error(json.error ?? 'Invalid email or password');
-  return json.user as GASUser;
+  if (json.error || json.status !== 'Success') {
+    throw new Error(json.error ?? 'Invalid credentials');
+  }
+  const initials = (json.userName as string)
+    .split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2);
+  return {
+    id: email.toLowerCase().trim(),
+    name: json.userName as string,
+    email: email.toLowerCase().trim(),
+    role: normalizeRole(json.userRole as string),
+    territory: '',  // not returned by their login — enriched later from getUsers
+    avatarInitials: initials,
+  };
 }
 
 // ── Customers ─────────────────────────────────────────────────
@@ -79,20 +97,60 @@ export interface GASCustomer {
   dayOfWeek: number;
 }
 
-export async function fetchCustomers(): Promise<GASCustomer[]> {
-  const raw = await gasGet<Record<string, unknown>>('getCustomers');
-  return raw.map(r => ({
-    ...r,
-    priorityTier: Number(r.priorityTier) || 1,
-    openOrderCount: Number(r.openOrderCount) || 0,
-    revenue: Number(r.revenue) || 0,
-    dayOfWeek: Number(r.dayOfWeek) || 1,
-    activeStatus: r.activeStatus === 'true' || r.activeStatus === true,
-  })) as GASCustomer[];
+// Their getCustomers returns objects with these normalized keys:
+//   ID, Customer (or CustomerName), SalesRep (email), SalespersonName,
+//   LastOrderDate, VisitFrequency, VisitStartDate, Priority, revenue cols Q1_2023 etc.
+function mapRawCustomer(r: Record<string, unknown>): GASCustomer {
+  const priorityRaw = String(r.Priority ?? r.priority ?? '').toLowerCase();
+  const tierMap: Record<string, number> = { '1': 1, '2': 2, '3': 3, '4': 4, high: 1, medium: 2, low: 3 };
+  const tier = tierMap[priorityRaw] ?? 2;
+
+  const freqRaw = String(r.VisitFrequency ?? r.visitFrequency ?? r.Frequency ?? '').toLowerCase();
+  const freqMap: Record<string, GASCustomer['visitFrequency']> = {
+    weekly: 'weekly', 'bi-weekly': 'biweekly', biweekly: 'biweekly', monthly: 'monthly',
+  };
+  const freq = freqMap[freqRaw] ?? 'monthly';
+
+  // Sum quarterly revenue columns (Q1_2023, Q2_2023, etc.)
+  let revenue = 0;
+  Object.entries(r).forEach(([k, v]) => {
+    if (/^Q\d_\d{4}$/.test(k) && typeof v === 'number') revenue += v;
+  });
+
+  // Derive dayOfWeek from VisitStartDate if present
+  let dayOfWeek = 1;
+  const startDate = r.VisitStartDate ?? r.visitStartDate;
+  if (startDate) {
+    const d = new Date(String(startDate));
+    if (!isNaN(d.getTime())) dayOfWeek = d.getDay();
+  }
+
+  return {
+    id: String(r.ID ?? r.id ?? r.CustomerID ?? ''),
+    name: String(r.Customer ?? r.CustomerName ?? r.customer ?? ''),
+    assignedRepId: String(r.SalesRep ?? r.salesRep ?? r.RepEmail ?? '').toLowerCase().trim(),
+    assignedRepName: String(r.SalespersonName ?? r.RepName ?? r.SalesRep ?? ''),
+    territory: String(r.Territory ?? r.territory ?? ''),
+    billingAddress: String(r.Address ?? r.BillingAddress ?? r.address ?? ''),
+    phone: String(r.Phone ?? r.phone ?? ''),
+    email: String(r.Email ?? r.CustomerEmail ?? r.email ?? ''),
+    priorityTier: tier as 1 | 2 | 3 | 4,
+    customerClass: String(r.Category ?? r.CustomerClass ?? r.Type ?? ''),
+    visitFrequency: freq,
+    lastContactDate: String(r.LastOrderDate ?? r.LastContact ?? r.VisitStartDate ?? new Date().toISOString()),
+    activeStatus: String(r.Status ?? r.status ?? 'active').toLowerCase() !== 'inactive',
+    openOrderCount: Number(r.OpenOrders ?? r.openOrders ?? 0),
+    revenue,
+    dayOfWeek,
+  };
 }
 
-export async function updateCustomerField(id: string, fields: Record<string, unknown>): Promise<void> {
-  await gasPost({ action: 'updateCustomer', id, ...fields });
+export async function fetchCustomers(userEmail?: string): Promise<GASCustomer[]> {
+  const raw = await gasGet<Record<string, unknown>[]>(
+    'getCustomers',
+    userEmail ? { userEmail } : {}
+  );
+  return (Array.isArray(raw) ? raw : []).map(mapRawCustomer);
 }
 
 // ── Activities / Logs ─────────────────────────────────────────
@@ -107,14 +165,60 @@ export interface GASActivity {
   source?: 'manual' | 'gmail-auto';
 }
 
+// Their log rows come back with whitespace-stripped header keys:
+// Timestamp, UserEmail (or userEmail), CustomerName, Notes, Reason,
+// NewEmail, FollowUpDate, LogType, Priority
+function mapRawLog(r: Record<string, unknown>, idx: number): GASActivity {
+  const logType = String(r.LogType ?? r.logType ?? r.Type ?? 'note').toLowerCase();
+  const typeMap: Record<string, GASActivity['type']> = {
+    'phone call': 'call', call: 'call', phone: 'call',
+    visit: 'visit', 'in-person': 'visit', field: 'visit',
+    email: 'email', note: 'note', other: 'note',
+  };
+
+  const customerName = String(r.CustomerName ?? r.Customer ?? r.customername ?? '');
+  const customerID = String(r.CustomerID ?? r.ID ?? r.customerId ?? '');
+
+  return {
+    id: String(r.ID ?? r.id ?? `log_${idx}`),
+    customerId: customerID || customerName, // we'll resolve by name in store
+    type: typeMap[logType] ?? 'note',
+    date: r.Timestamp ? new Date(String(r.Timestamp)).toISOString() : new Date().toISOString(),
+    repName: String(r.UserEmail ?? r.userEmail ?? r.RepName ?? ''),
+    summary: String(r.Notes ?? r.notes ?? r.Summary ?? ''),
+    source: 'manual',
+  };
+}
+
 export async function fetchActivities(): Promise<GASActivity[]> {
-  return gasGet<GASActivity>('getLogs');
+  const raw = await gasGet<Record<string, unknown>[]>('getLogs');
+  return (Array.isArray(raw) ? raw : []).map(mapRawLog);
 }
 
-export async function saveActivity(activity: GASActivity): Promise<{ id: string }> {
-  return gasPost<{ id: string }>({ action: 'saveLog', ...activity });
+// Save a log using their existing saveLog parameter names
+export async function saveActivity(
+  activity: GASActivity,
+  customerName: string,
+  userEmail: string
+): Promise<void> {
+  const logTypeMap: Record<string, string> = {
+    call: 'Phone Call', visit: 'Visit', email: 'Email', note: 'Note',
+  };
+  await gasPost({
+    action: 'saveLog',
+    userEmail,
+    CustomerName: customerName,
+    CustomerID: activity.customerId,
+    Notes: activity.summary,
+    LogType: logTypeMap[activity.type] ?? 'Note',
+    Reason: '',
+    NewEmail: '',
+    FollowUpDate: '',
+    Priority: '',
+  });
 }
 
+// deleteLog is the one action their script doesn't have yet — add the snippet below
 export async function deleteActivity(id: string): Promise<void> {
   await gasPost({ action: 'deleteLog', id });
 }
@@ -122,7 +226,15 @@ export async function deleteActivity(id: string): Promise<void> {
 // ── Users ─────────────────────────────────────────────────────
 
 export async function fetchUsers(): Promise<GASUser[]> {
-  return gasGet<GASUser>('getUsers');
+  const raw = await gasGet<Record<string, unknown>[]>('getUsers');
+  return (Array.isArray(raw) ? raw : []).map(u => ({
+    id: String(u.email ?? u.Email ?? '').toLowerCase().trim(),
+    name: String(u.name ?? u.Name ?? u.username ?? ''),
+    email: String(u.email ?? u.Email ?? '').toLowerCase().trim(),
+    role: normalizeRole(String(u.role ?? u.Role ?? '')),
+    territory: String(u.territory ?? u.Territory ?? ''),
+    avatarInitials: String(u.name ?? u.Name ?? '').split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2),
+  }));
 }
 
 // ── Quick Links ───────────────────────────────────────────────
@@ -136,20 +248,30 @@ export interface GASQuickLink {
   url: string;
 }
 
+// Their quicklinks sheet can have any column names — we try common ones
 export async function fetchQuickLinks(): Promise<GASQuickLink[]> {
-  return gasGet<GASQuickLink>('getQuickLinks');
+  const raw = await gasGet<Record<string, unknown>[]>('getQuickLinks');
+  return (Array.isArray(raw) ? raw : []).map((r, i) => ({
+    id: String(r.id ?? r.ID ?? i),
+    label: String(r.Label ?? r.label ?? r.Name ?? r.name ?? r.Title ?? r.A ?? ''),
+    icon: String(r.Icon ?? r.icon ?? 'Link'),
+    description: String(r.Description ?? r.description ?? r.Notes ?? r.B ?? ''),
+    color: String(r.Color ?? r.color ?? 'bg-amber-50 text-amber-600'),
+    url: String(r.URL ?? r.url ?? r.Link ?? r.link ?? r.C ?? '#'),
+  }));
 }
 
-// ── Health check ──────────────────────────────────────────────
+// ── Connection check ──────────────────────────────────────────
 
 export async function pingGAS(): Promise<boolean> {
   try {
     if (!GAS_URL) return false;
     const url = new URL(GAS_URL);
     url.searchParams.set('action', 'ping');
-    const res = await fetch(url.toString());
-    const json = await res.json();
-    return json.status === 'ok';
+    const res = await fetch(url.toString(), { signal: AbortSignal.timeout(5000) });
+    await res.json(); // consume body
+    // Their script returns { error: "Action 'ping' not handled." } — that's still a live connection
+    return res.ok;
   } catch {
     return false;
   }

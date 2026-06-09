@@ -6,6 +6,7 @@ import {
   deleteActivity as gasDelete, isGASConfigured,
   type GASCustomer, type GASActivity,
 } from '../api/sheets';
+import { useAuthStore } from './authStore';
 
 function gasCustomerToLocal(c: GASCustomer): Customer {
   return {
@@ -67,9 +68,10 @@ export const useCustomerStore = create<CustomerState>((set, get) => ({
   loadFromGAS: async () => {
     if (!isGASConfigured()) return; // stay on mock data
     set({ isSyncing: true, syncError: null });
+    const userEmail = useAuthStore.getState().currentUser?.email ?? '';
     try {
       const [rawCustomers, rawActivities] = await Promise.all([
-        fetchCustomers(),
+        fetchCustomers(userEmail),
         fetchActivities(),
       ]);
       set({
@@ -93,11 +95,16 @@ export const useCustomerStore = create<CustomerState>((set, get) => ({
   addActivity: (activity: Activity) => {
     // Optimistic update — show immediately
     set(state => ({ activities: [activity, ...state.activities] }));
-    // Background write to GAS
+    // Background write to GAS using their saveLog format
     if (isGASConfigured()) {
-      gasSave(activity as GASActivity).catch(err => {
+      const { currentUser } = useAuthStore.getState();
+      const customer = get().customers.find(c => c.id === activity.customerId);
+      gasSave(
+        activity as GASActivity,
+        customer?.name ?? activity.customerId,
+        currentUser?.email ?? ''
+      ).catch(err => {
         console.error('[GAS] saveActivity failed:', err);
-        // On failure, roll back
         set(state => ({ activities: state.activities.filter(a => a.id !== activity.id) }));
       });
     }
