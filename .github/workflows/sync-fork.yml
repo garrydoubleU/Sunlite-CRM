@@ -1,0 +1,19 @@
+name: Sync to Personal Fork
+
+on:
+  push:
+    branches:
+      - claude/eager-goldberg-p77x8t
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Push to personal fork main
+        run: |
+          git remote add fork https://x-access-token:${{ secrets.FORK_PAT }}@github.com/garrydoubleU/Sunlite-CRM.git
+          git push fork HEAD:main --force
