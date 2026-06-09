@@ -1,12 +1,13 @@
 import { useState, useMemo } from 'react';
 import { createPortal } from 'react-dom';
-import { X, MapPin, Phone, Mail, Calendar, Clock, Plus, ChevronDown, FileText, PhoneCall, Navigation, Star } from 'lucide-react';
+import { X, MapPin, Phone, Mail, Calendar, Clock, Plus, ChevronDown, FileText, PhoneCall, Navigation, Star, Send } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import type { Customer, ActivityType } from '../types';
 import { useCustomerStore } from '../store/customerStore';
 import { useAuthStore } from '../store/authStore';
 import { calculateNextVisit, getDueDateLabel, getDueDateColor, safeFormat, safeDaysSince } from '../utils/scheduler';
 import { canViewRevenue } from '../utils/roleGate';
+import { sendEmail, isGASConfigured } from '../api/sheets';
 
 interface CustomerModalProps {
   customer: Customer;
@@ -46,6 +47,15 @@ export default function CustomerModal({ customer, onClose }: CustomerModalProps)
   const [followUp, setFollowUp] = useState('');
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+
+  // Email compose state
+  const [showCompose, setShowCompose] = useState(false);
+  const [emailTo, setEmailTo] = useState(customer.email ?? '');
+  const [emailSubject, setEmailSubject] = useState('');
+  const [emailBody, setEmailBody] = useState('');
+  const [emailSending, setEmailSending] = useState(false);
+  const [emailSent, setEmailSent] = useState(false);
+  const [emailError, setEmailError] = useState('');
 
   const nextVisit = calculateNextVisit(customer.lastContactDate, customer.visitFrequency, customer.dayOfWeek);
   const daysAgo = safeDaysSince(customer.lastContactDate);
@@ -90,6 +100,43 @@ export default function CustomerModal({ customer, onClose }: CustomerModalProps)
     setTimeout(() => setSaved(false), 2000);
   };
 
+  const handleSendEmail = async () => {
+    if (!emailTo.trim() || !emailSubject.trim() || !emailBody.trim()) return;
+    setEmailSending(true);
+    setEmailError('');
+    try {
+      if (isGASConfigured()) {
+        await sendEmail({
+          to: emailTo.trim(),
+          subject: emailSubject.trim(),
+          body: emailBody.trim(),
+          customerName: customer.name,
+          customerId: customer.id,
+          userEmail: currentUser?.email ?? '',
+          repName: currentUser?.name ?? '',
+        });
+      }
+      // Optimistic local activity log
+      addActivity({
+        id: `email_${Date.now()}`,
+        customerId: customer.id,
+        type: 'email',
+        date: new Date().toISOString(),
+        repName: currentUser?.name ?? 'Unknown',
+        summary: `[Email sent] ${emailSubject}: ${emailBody.substring(0, 200)}`,
+        source: 'manual',
+      });
+      setEmailSent(true);
+      setEmailSubject('');
+      setEmailBody('');
+      setTimeout(() => { setEmailSent(false); setShowCompose(false); }, 2000);
+    } catch {
+      setEmailError('Failed to send. Check your GAS script has the email action.');
+    } finally {
+      setEmailSending(false);
+    }
+  };
+
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center p-0 md:p-4">
       {/* Backdrop */}
@@ -129,9 +176,22 @@ export default function CustomerModal({ customer, onClose }: CustomerModalProps)
                 )}
               </div>
             </div>
-            <button onClick={onClose} className="text-blue-300 hover:text-white transition-colors p-1 flex-shrink-0 mt-1">
-              <X size={20} />
-            </button>
+            <div className="flex items-center gap-2 flex-shrink-0 mt-1">
+              {customer.email && (
+                <button
+                  onClick={() => setShowCompose(!showCompose)}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                    showCompose ? 'bg-amber-500 text-white' : 'bg-white/10 text-blue-200 hover:bg-white/20 hover:text-white'
+                  }`}
+                >
+                  <Send size={13} />
+                  <span className="hidden sm:inline">Email</span>
+                </button>
+              )}
+              <button onClick={onClose} className="text-blue-300 hover:text-white transition-colors p-1">
+                <X size={20} />
+              </button>
+            </div>
           </div>
 
           {/* Stat chips */}
@@ -228,6 +288,68 @@ export default function CustomerModal({ customer, onClose }: CustomerModalProps)
                   </span>
                 </div>
               </div>}
+
+              {/* Compose Email */}
+              {showCompose && (
+                <div className="border border-amber-200 rounded-xl overflow-hidden">
+                  <div className="bg-amber-50 px-4 py-2.5 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Send size={13} className="text-amber-600" />
+                      <p className="text-xs font-black text-amber-700 uppercase tracking-wider">New Email</p>
+                    </div>
+                    <button onClick={() => setShowCompose(false)} className="text-amber-400 hover:text-amber-600">
+                      <X size={14} />
+                    </button>
+                  </div>
+                  <div className="p-3 space-y-2.5 bg-white">
+                    <div>
+                      <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1">To</label>
+                      <input
+                        value={emailTo}
+                        onChange={e => setEmailTo(e.target.value)}
+                        placeholder="recipient@example.com"
+                        className="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-700 outline-none focus:border-amber-400"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1">Subject</label>
+                      <input
+                        value={emailSubject}
+                        onChange={e => setEmailSubject(e.target.value)}
+                        placeholder="Subject line..."
+                        className="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-700 outline-none focus:border-amber-400"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1">Message</label>
+                      <textarea
+                        value={emailBody}
+                        onChange={e => setEmailBody(e.target.value)}
+                        placeholder="Write your message..."
+                        rows={4}
+                        className="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-700 outline-none resize-none focus:border-amber-400"
+                      />
+                    </div>
+                    {emailError && <p className="text-xs text-red-500">{emailError}</p>}
+                    <button
+                      onClick={handleSendEmail}
+                      disabled={!emailTo || !emailSubject || !emailBody || emailSending}
+                      className={`w-full py-2.5 rounded-lg font-bold text-sm flex items-center justify-center gap-2 transition-all ${
+                        emailSent ? 'bg-green-500 text-white' :
+                        emailSending ? 'bg-gray-200 text-gray-400' :
+                        emailTo && emailSubject && emailBody ? 'bg-amber-500 hover:bg-amber-600 text-white' :
+                        'bg-gray-100 text-gray-400'
+                      }`}
+                    >
+                      <Send size={13} />
+                      {emailSent ? 'Sent!' : emailSending ? 'Sending...' : 'Send Email'}
+                    </button>
+                    <p className="text-[10px] text-gray-400 text-center">
+                      Sent via Gmail · auto-logged to activity timeline
+                    </p>
+                  </div>
+                </div>
+              )}
 
               {/* Log Quick Note */}
               <div>

@@ -237,9 +237,31 @@ export async function saveActivity(
   });
 }
 
-// deleteLog is the one action their script doesn't have yet — add the snippet below
 export async function deleteActivity(id: string): Promise<void> {
   await gasPost({ action: 'deleteLog', id });
+}
+
+// ── Email ─────────────────────────────────────────────────────
+
+export async function sendEmail(params: {
+  to: string;
+  subject: string;
+  body: string;
+  customerName: string;
+  customerId: string;
+  userEmail: string;
+  repName: string;
+}): Promise<void> {
+  await gasPost({
+    action: 'sendEmail',
+    to: params.to,
+    subject: params.subject,
+    body: params.body,
+    customerName: params.customerName,
+    customerId: params.customerId,
+    userEmail: params.userEmail,
+    repName: params.repName,
+  });
 }
 
 // ── Users ─────────────────────────────────────────────────────
