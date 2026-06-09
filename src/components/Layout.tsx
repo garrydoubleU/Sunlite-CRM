@@ -1,5 +1,5 @@
 import { type ReactNode, useState } from 'react';
-import { LayoutDashboard, Users, MessageSquare, Link2, LogOut, Bell, Search, RefreshCw, Menu, X } from 'lucide-react';
+import { LayoutDashboard, Users, MessageSquare, Link2, LogOut, Bell, Search, RefreshCw, Menu, X, Mail } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import { useCustomerStore } from '../store/customerStore';
 import NotificationCenter from './NotificationCenter';
@@ -21,7 +21,7 @@ const NAV_ITEMS = [
 
 export default function Layout({ children, currentPage, onNavigate }: LayoutProps) {
   const { currentUser, logout } = useAuthStore();
-  const { isSyncing, triggerSync } = useCustomerStore();
+  const { isSyncing, triggerSync, syncEmails, isSyncingEmails } = useCustomerStore();
   const [showNotifications, setShowNotifications] = useState(false);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
 
@@ -150,10 +150,16 @@ export default function Layout({ children, currentPage, onNavigate }: LayoutProp
                 className="bg-transparent text-sm text-gray-600 placeholder-gray-400 outline-none flex-1 min-w-0" />
             </div>
 
-            {/* Sync */}
-            <button onClick={triggerSync}
+            {/* Sync data */}
+            <button onClick={triggerSync} title="Sync customers & data"
               className={`p-2 rounded-lg transition-all ${isSyncing ? 'text-amber-500' : 'text-gray-400 hover:bg-gray-50'}`}>
               <RefreshCw size={16} className={isSyncing ? 'animate-spin' : ''} />
+            </button>
+
+            {/* Sync emails */}
+            <button onClick={() => syncEmails()} title="Sync customer emails from Gmail"
+              className={`p-2 rounded-lg transition-all ${isSyncingEmails ? 'text-blue-500' : 'text-gray-400 hover:bg-gray-50'}`}>
+              <Mail size={16} className={isSyncingEmails ? 'animate-pulse' : ''} />
             </button>
 
             {/* Notifications */}

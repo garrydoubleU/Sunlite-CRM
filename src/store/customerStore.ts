@@ -3,7 +3,7 @@ import type { Customer, Activity } from '../types';
 import { CUSTOMERS, ACTIVITIES } from '../api/mockData';
 import {
   fetchCustomers, fetchActivities, saveActivity as gasSave,
-  deleteActivity as gasDelete, isGASConfigured,
+  deleteActivity as gasDelete, isGASConfigured, triggerEmailSync,
   type GASCustomer, type GASActivity,
 } from '../api/sheets';
 import { useAuthStore } from './authStore';
@@ -51,6 +51,8 @@ interface CustomerState {
   // Reads
   loadFromGAS: () => Promise<void>;
   triggerSync: () => void;
+  syncEmails: () => Promise<void>;
+  isSyncingEmails: boolean;
   // Activity CRUD — optimistic UI + background GAS write
   addActivity: (activity: Activity) => void;
   updateActivity: (id: string, updates: Partial<Activity>) => void;
@@ -64,6 +66,7 @@ export const useCustomerStore = create<CustomerState>((set, get) => ({
   activities: ACTIVITIES,
   lastSync: null,
   isSyncing: false,
+  isSyncingEmails: false,
   syncError: null,
 
   loadFromGAS: async () => {
@@ -91,6 +94,22 @@ export const useCustomerStore = create<CustomerState>((set, get) => ({
 
   triggerSync: () => {
     get().loadFromGAS();
+  },
+
+  syncEmails: async () => {
+    if (!isGASConfigured()) return;
+    set({ isSyncingEmails: true });
+    try {
+      await triggerEmailSync();
+      // Reload activities to pick up newly logged emails
+      const rawActivities = await fetchActivities();
+      set({
+        activities: rawActivities.map(gasActivityToLocal),
+        isSyncingEmails: false,
+      });
+    } catch {
+      set({ isSyncingEmails: false });
+    }
   },
 
   addActivity: (activity: Activity) => {

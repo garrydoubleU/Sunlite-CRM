@@ -312,6 +312,12 @@ export async function fetchQuickLinks(): Promise<GASQuickLink[]> {
   }));
 }
 
+// ── Email sync ────────────────────────────────────────────────
+
+export async function triggerEmailSync(): Promise<void> {
+  await gasGet<{ status: string }>('syncEmails');
+}
+
 // ── Connection check ──────────────────────────────────────────
 
 export async function pingGAS(): Promise<boolean> {
