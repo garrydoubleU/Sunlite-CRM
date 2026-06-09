@@ -3,23 +3,6 @@ import { Mail } from 'lucide-react';
 import { useGmailStore, hasPreviousGmailAuth } from '../store/gmailStore';
 import { fetchGmailSignature } from '../api/gmail';
 
-declare global {
-  interface Window {
-    google?: {
-      accounts: {
-        oauth2: {
-          initTokenClient: (config: {
-            client_id: string;
-            scope: string;
-            prompt?: string;
-            callback: (resp: { access_token: string; expires_in: number; error?: string }) => void;
-          }) => { requestAccessToken: (opts?: { prompt?: string }) => void };
-        };
-      };
-    };
-  }
-}
-
 const CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID as string | undefined;
 const SCOPE = [
   'https://www.googleapis.com/auth/gmail.send',

@@ -1,11 +1,6 @@
 import { addDays, getDay, parseISO, differenceInDays, format, isValid } from 'date-fns';
 import type { VisitFrequency } from '../types';
 
-// Parse structured email summaries stored by GAS into subject + body + metadata.
-// Handles formats:
-//   "[Email sent] Subject\nbody..."
-//   "[Gmail to: addr] Subject\nbody..."
-//   "[Gmail from: addr] Subject\nbody..."
 export interface ParsedEmail {
   direction: 'sent' | 'received' | null;
   address: string | null;
@@ -13,12 +8,37 @@ export interface ParsedEmail {
   body: string;
 }
 
+// Strip noise from email body:
+//   - [gmail-id:xxx] dedup tags
+//   - Gmail quoted reply chains ("On Mon, Jun 9 ... wrote:" + everything after)
+//   - Leading > quote markers
+function cleanEmailBody(raw: string): string {
+  // Remove [gmail-id:...] tags
+  let s = raw.replace(/\[gmail-id:[^\]]+\]/g, '').trim();
+  // Truncate at quoted reply chain
+  s = s.replace(/\s*On .+? wrote:\s*[\s\S]*/i, '').trim();
+  // Remove lines that are purely quote markers
+  s = s.split('\n').filter(l => !l.match(/^>+\s*/)).join('\n').trim();
+  return s;
+}
+
+// Parse structured email summaries stored by GAS.
+// Handles all formats:
+//   "[gmail-auto] [gmail-id:xxx] Subject\nbody..."   — auto-synced incoming
+//   "[Gmail from: addr] Subject\nbody..."
+//   "[Gmail to: addr] Subject\nbody..."
+//   "[Email sent] Subject\nbody..."
+//   "[Email sent] Subject: body..."                  — legacy single-line
 export function parseEmailSummary(summary: string): ParsedEmail | null {
   if (!summary) return null;
-  const tagMatch = summary.match(/^\[([^\]]+)\]\s*/);
+
+  // Strip all [gmail-id:xxx] tags first so they don't confuse tag parsing
+  let s = summary.replace(/\[gmail-id:[^\]]+\]\s*/g, '');
+
+  const tagMatch = s.match(/^\[([^\]]+)\]\s*/);
   if (!tagMatch) return null;
 
-  const tag = tagMatch[1].toLowerCase();
+  const tag = tagMatch[1].toLowerCase().trim();
   let direction: ParsedEmail['direction'] = null;
   let address: string | null = null;
 
@@ -28,26 +48,37 @@ export function parseEmailSummary(summary: string): ParsedEmail | null {
   } else if (tag.startsWith('gmail to:') || tag.startsWith('email to:')) {
     direction = 'sent';
     address = tagMatch[1].replace(/^[^:]+:\s*/i, '').trim();
+  } else if (tag === 'gmail-auto') {
+    direction = 'received'; // legacy auto-sync without address tag
   } else if (tag.includes('email sent') || tag.includes('sent')) {
     direction = 'sent';
   } else {
     return null;
   }
 
-  const rest = summary.slice(tagMatch[0].length);
+  const rest = s.slice(tagMatch[0].length).trim();
+
+  // Split subject from body on first newline
   const nlIdx = rest.indexOf('\n');
   let subject: string;
   let body: string;
   if (nlIdx !== -1) {
     subject = rest.slice(0, nlIdx).trim();
-    body = rest.slice(nlIdx + 1).trim();
+    body = cleanEmailBody(rest.slice(nlIdx + 1));
   } else {
+    // Legacy "Subject: body" single-line
     const colonIdx = rest.indexOf(': ');
     subject = colonIdx !== -1 ? rest.slice(0, colonIdx).trim() : rest.trim();
-    body = colonIdx !== -1 ? rest.slice(colonIdx + 2).trim() : '';
+    body = colonIdx !== -1 ? cleanEmailBody(rest.slice(colonIdx + 2)) : '';
   }
 
   return { direction, address, subject, body };
+}
+
+// Returns true if a summary string looks like an email log entry,
+// even if the activity type was stored as 'note' (older GAS versions).
+export function looksLikeEmail(summary: string): boolean {
+  return /^\[(gmail|email)/i.test(summary.trim());
 }
 
 /** Never throws — returns fallback string when date is missing or invalid */

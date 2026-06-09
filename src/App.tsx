@@ -12,12 +12,14 @@ import Customers from './pages/Customers';
 import ActivityFeed from './pages/ActivityFeed';
 import QuickLinksPage from './pages/QuickLinksPage';
 import SettingsPage from './pages/SettingsPage';
+import { useGmailSilentAuth } from './hooks/useGmailSilentAuth';
 
 type Page = 'dashboard' | 'customers' | 'activity' | 'quicklinks' | 'settings';
 
 function App() {
   const { isAuthenticated } = useAuthStore();
   const { loadFromGAS } = useCustomerStore();
+  useGmailSilentAuth(); // silently restore Gmail token on every page load
 
   // Load live data from Google Sheets on login
   useEffect(() => {

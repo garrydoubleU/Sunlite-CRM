@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Phone, MapPin, FileText, Mail, Plus, Trash2, Edit3, Check, ArrowUpRight, ArrowDownLeft } from 'lucide-react';
-import { safeFormat, parseEmailSummary } from '../utils/scheduler';
+import { safeFormat, parseEmailSummary, looksLikeEmail } from '../utils/scheduler';
 import type { ActivityType } from '../types';
 import { useCustomerStore } from '../store/customerStore';
 import { useAuthStore } from '../store/authStore';
@@ -145,7 +145,8 @@ export default function ActivityTimeline({ customerId }: ActivityTimelineProps) 
                     </div>
                   </div>
                 ) : (() => {
-                  const email = activity.type === 'email' ? parseEmailSummary(activity.summary) : null;
+                  const isEmail = activity.type === 'email' || looksLikeEmail(activity.summary);
+                  const email = isEmail ? parseEmailSummary(activity.summary) : null;
                   if (email) {
                     return (
                       <div className="mt-1 bg-gray-50 rounded-lg border border-gray-100 overflow-hidden">

@@ -5,7 +5,7 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 
 import type { Customer, ActivityType } from '../types';
 import { useCustomerStore } from '../store/customerStore';
 import { useAuthStore } from '../store/authStore';
-import { calculateNextVisit, getDueDateLabel, getDueDateColor, safeFormat, safeDaysSince, parseEmailSummary } from '../utils/scheduler';
+import { calculateNextVisit, getDueDateLabel, getDueDateColor, safeFormat, safeDaysSince, parseEmailSummary, looksLikeEmail } from '../utils/scheduler';
 
 import { sendEmail, isGASConfigured } from '../api/sheets';
 import { sendGmailMessage } from '../api/gmail';
@@ -193,17 +193,6 @@ export default function CustomerModal({ customer, onClose }: CustomerModalProps)
               </div>
             </div>
             <div className="flex items-center gap-2 flex-shrink-0 mt-1">
-              {customer.email && (
-                <button
-                  onClick={() => setShowCompose(!showCompose)}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                    showCompose ? 'bg-amber-500 text-white' : 'bg-white/10 text-blue-200 hover:bg-white/20 hover:text-white'
-                  }`}
-                >
-                  <Send size={13} />
-                  <span className="hidden sm:inline">Email</span>
-                </button>
-              )}
               <button onClick={onClose} className="text-blue-300 hover:text-white transition-colors p-1">
                 <X size={20} />
               </button>
@@ -243,6 +232,22 @@ export default function CustomerModal({ customer, onClose }: CustomerModalProps)
               <p className="text-[10px] text-blue-200 truncate">{customer.assignedRepName.split(' ')[0]} {customer.assignedRepName.split(' ')[1]?.[0]}.</p>
             </div>
           </div>
+          {/* Action bar */}
+          {customer.email && (
+            <div className="mt-4 pt-3 border-t border-white/10">
+              <button
+                onClick={() => setShowCompose(!showCompose)}
+                className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold transition-all w-full justify-center ${
+                  showCompose
+                    ? 'bg-amber-500 text-white'
+                    : 'bg-white text-[#0F2A4A] hover:bg-amber-50'
+                }`}
+              >
+                <Send size={15} />
+                {showCompose ? 'Close Compose' : `Email ${customer.name.split(' ')[0]}`}
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Body */}
@@ -591,7 +596,8 @@ export default function CustomerModal({ customer, onClose }: CustomerModalProps)
                           <span className="text-[10px] text-gray-400">{safeFormat(activity.date, 'MMM d')}</span>
                         </div>
                         {(() => {
-                          const email = activity.type === 'email' ? parseEmailSummary(activity.summary) : null;
+                          const isEmail = activity.type === 'email' || looksLikeEmail(activity.summary);
+                          const email = isEmail ? parseEmailSummary(activity.summary) : null;
                           if (email) return (
                             <div className="mt-0.5 bg-white rounded-lg border border-gray-200 overflow-hidden">
                               <div className="flex items-center gap-1 px-2 py-0.5 bg-gray-50 border-b border-gray-100">
