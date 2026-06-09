@@ -171,6 +171,7 @@ export interface GASActivity {
   repName: string;
   summary: string;
   source?: 'manual' | 'gmail-auto';
+  followUpDate?: string;
 }
 
 // Their log rows come back with whitespace-stripped header keys:
@@ -187,14 +188,18 @@ function mapRawLog(r: Record<string, unknown>, idx: number): GASActivity {
   const customerName = String(r.CustomerName ?? r.Customer ?? r.customername ?? '');
   const customerID = String(r.CustomerID ?? r.ID ?? r.customerId ?? '');
 
+  const followUpRaw = r.FollowUpDate ?? r.followUpDate ?? r.FollowUp ?? '';
+  const followUpDate = followUpRaw ? safeDate(followUpRaw, '') : undefined;
+
   return {
     id: String(r.ID ?? r.id ?? `log_${idx}`),
-    customerId: customerID || customerName, // we'll resolve by name in store
+    customerId: customerID || customerName,
     type: typeMap[logType] ?? 'note',
     date: safeDate(r.Timestamp),
     repName: String(r.UserEmail ?? r.userEmail ?? r.RepName ?? ''),
     summary: String(r.Notes ?? r.notes ?? r.Summary ?? ''),
     source: 'manual',
+    ...(followUpDate ? { followUpDate } : {}),
   };
 }
 
@@ -221,7 +226,7 @@ export async function saveActivity(
     LogType: logTypeMap[activity.type] ?? 'Note',
     Reason: '',
     NewEmail: '',
-    FollowUpDate: '',
+    FollowUpDate: activity.followUpDate ?? '',
     Priority: '',
   });
 }

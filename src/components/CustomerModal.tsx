@@ -61,6 +61,7 @@ export default function CustomerModal({ customer, onClose }: CustomerModalProps)
       repName: currentUser?.name ?? 'Unknown',
       summary: notes.trim(),
       source: 'manual',
+      ...(followUp ? { followUpDate: new Date(followUp).toISOString() } : {}),
     });
     await new Promise(r => setTimeout(r, 600));
     setSaving(false);

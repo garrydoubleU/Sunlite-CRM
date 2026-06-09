@@ -39,6 +39,7 @@ export interface Activity {
   repName: string;
   summary: string;
   source?: 'manual' | 'gmail-auto';
+  followUpDate?: string;
 }
 
 export interface Route {

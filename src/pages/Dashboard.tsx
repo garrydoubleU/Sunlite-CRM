@@ -1,13 +1,24 @@
-import { AlertTriangle, Calendar, TrendingUp, Phone, CheckCircle } from 'lucide-react';
+import { useState } from 'react';
+import { AlertTriangle, Calendar, TrendingUp, Phone, CheckCircle, Clock } from 'lucide-react';
 import { useCustomerStore } from '../store/customerStore';
 import { useAuthStore } from '../store/authStore';
 import { calculateNextVisit, getDaysUntil, getDueDateColor, safeDaysSince, safeFormat } from '../utils/scheduler';
 import RoutePlanner from '../components/RoutePlanner';
+import CustomerModal from '../components/CustomerModal';
+import type { Customer } from '../types';
 
 export default function Dashboard() {
   const { customers, activities } = useCustomerStore();
   const { currentUser } = useAuthStore();
   const role = currentUser?.role ?? 'field_sales';
+  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
+
+  function openCustomer(nameOrId: string) {
+    const found = customers.find(c =>
+      c.id === nameOrId || c.name.toLowerCase() === nameOrId.toLowerCase()
+    );
+    if (found) setSelectedCustomer(found);
+  }
   const isInsideOrCS = role === 'inside_sales' || role === 'customer_service';
 
   // ── Shared stats ──────────────────────────────────────────────
@@ -21,6 +32,13 @@ export default function Dashboard() {
   const recentActivities = [...activities]
     .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
     .slice(0, 8);
+
+  // Activities that have a future follow-up date set
+  const now = new Date();
+  const upcomingFollowUps = activities
+    .filter(a => a.followUpDate && new Date(a.followUpDate) >= now)
+    .sort((a, b) => new Date(a.followUpDate!).getTime() - new Date(b.followUpDate!).getTime())
+    .slice(0, 10);
 
   // ── Field / Admin stats ───────────────────────────────────────
   const followUpsToday = customers.filter(c => {
@@ -111,14 +129,14 @@ export default function Dashboard() {
                 const days = safeDaysSince(c.lastContactDate);
                 const tier = c.priorityTier;
                 return (
-                  <div key={c.id} className="flex items-center gap-3 p-3 rounded-xl bg-gray-50 hover:bg-blue-50 transition-colors">
+                  <div key={c.id} className="flex items-center gap-3 p-3 rounded-xl bg-gray-50 hover:bg-blue-50 transition-colors cursor-pointer" onClick={() => setSelectedCustomer(c)}>
                     <div className={`w-7 h-7 rounded-lg flex items-center justify-center text-[10px] font-black flex-shrink-0 ${
                       tier === 1 ? 'bg-red-100 text-red-600' :
                       tier === 2 ? 'bg-amber-100 text-amber-600' :
                       'bg-gray-100 text-gray-500'
                     }`}>T{tier}</div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-xs font-bold text-gray-800 truncate">{c.name}</p>
+                      <p className="text-xs font-bold text-amber-600 hover:underline truncate">{c.name}</p>
                       <p className="text-[10px] text-gray-400">{c.phone || 'No phone'}</p>
                     </div>
                     <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full flex-shrink-0 ${
@@ -156,7 +174,9 @@ export default function Dashboard() {
                       {act.type}
                     </span>
                     <div className="flex-1 min-w-0">
-                      <p className="text-xs font-semibold text-gray-700">{customer?.name ?? act.customerId}</p>
+                      <button onClick={() => openCustomer(act.customerId)} className="text-xs font-semibold text-amber-600 hover:underline text-left truncate block w-full">
+                        {customer?.name ?? act.customerId}
+                      </button>
                       <p className="text-xs text-gray-500 leading-relaxed line-clamp-2">{act.summary}</p>
                       <p className="text-[10px] text-gray-400 mt-0.5">{act.repName} · {safeFormat(act.date, 'MMM d')}</p>
                     </div>
@@ -166,6 +186,45 @@ export default function Dashboard() {
             </div>
           </div>
         </div>
+
+        {/* Upcoming follow-ups */}
+        {upcomingFollowUps.length > 0 && (
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+            <div className="flex items-center gap-2 mb-4">
+              <Clock size={15} className="text-amber-500" />
+              <h3 className="text-xs font-black text-gray-800 uppercase tracking-wider">Upcoming Follow-ups</h3>
+            </div>
+            <div className="space-y-2">
+              {upcomingFollowUps.map(act => {
+                const customer = customers.find(c =>
+                  c.id === act.customerId || c.name.toLowerCase() === act.customerId.toLowerCase()
+                );
+                const daysUntil = Math.ceil((new Date(act.followUpDate!).getTime() - now.getTime()) / 86400000);
+                return (
+                  <div key={act.id} className="flex items-center gap-3 p-3 rounded-xl bg-amber-50 border border-amber-100">
+                    <div className="flex-1 min-w-0">
+                      <button onClick={() => openCustomer(act.customerId)} className="text-xs font-bold text-amber-700 hover:underline text-left truncate block">
+                        {customer?.name ?? act.customerId}
+                      </button>
+                      <p className="text-[10px] text-gray-500 truncate">{act.summary}</p>
+                    </div>
+                    <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full flex-shrink-0 ${
+                      daysUntil === 0 ? 'bg-red-100 text-red-600' :
+                      daysUntil <= 2 ? 'bg-amber-100 text-amber-700' :
+                      'bg-blue-100 text-blue-600'
+                    }`}>
+                      {daysUntil === 0 ? 'TODAY' : daysUntil === 1 ? 'TOMORROW' : `IN ${daysUntil}D`}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {selectedCustomer && (
+          <CustomerModal customer={selectedCustomer} onClose={() => setSelectedCustomer(null)} />
+        )}
       </div>
     );
   }
@@ -251,10 +310,10 @@ export default function Dashboard() {
               const colorClass = getDueDateColor(nextVisit);
               const label = days <= 0 ? 'TODAY' : days === 1 ? 'TOMORROW' : safeFormat(nextVisit.toISOString(), 'EEE, MMM d');
               return (
-                <div key={c.id} className="flex items-center gap-3 p-3 rounded-xl bg-gray-50 hover:bg-amber-50 transition-colors">
+                <div key={c.id} className="flex items-center gap-3 p-3 rounded-xl bg-gray-50 hover:bg-amber-50 transition-colors cursor-pointer" onClick={() => setSelectedCustomer(c)}>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
-                      <span className="font-bold text-xs text-gray-800">{c.name}</span>
+                      <span className="font-bold text-xs text-amber-600 hover:underline">{c.name}</span>
                       <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full uppercase ${
                         c.visitFrequency === 'weekly' ? 'bg-blue-100 text-blue-600' :
                         c.visitFrequency === 'biweekly' ? 'bg-purple-100 text-purple-600' :
@@ -293,7 +352,9 @@ export default function Dashboard() {
                     {act.type}
                   </span>
                   <div className="flex-1 min-w-0">
-                    <p className="text-xs font-semibold text-gray-700">{customer?.name ?? act.customerId}</p>
+                    <button onClick={() => openCustomer(act.customerId)} className="text-xs font-semibold text-amber-600 hover:underline text-left truncate block w-full">
+                      {customer?.name ?? act.customerId}
+                    </button>
                     <p className="text-xs text-gray-500 leading-relaxed truncate">{act.summary}</p>
                     <p className="text-[10px] text-gray-400 mt-0.5">{act.repName} · {safeFormat(act.date, 'MMM d')}</p>
                   </div>
@@ -303,6 +364,45 @@ export default function Dashboard() {
           </div>
         </div>
       </div>
+
+      {/* Upcoming follow-ups */}
+      {upcomingFollowUps.length > 0 && (
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
+          <div className="flex items-center gap-2 mb-4">
+            <Clock size={15} className="text-amber-500" />
+            <h3 className="text-xs font-black text-gray-800 uppercase tracking-wider">Upcoming Follow-ups</h3>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+            {upcomingFollowUps.map(act => {
+              const customer = customers.find(c =>
+                c.id === act.customerId || c.name.toLowerCase() === act.customerId.toLowerCase()
+              );
+              const daysUntil = Math.ceil((new Date(act.followUpDate!).getTime() - now.getTime()) / 86400000);
+              return (
+                <div key={act.id} className="flex items-center gap-3 p-3 rounded-xl bg-amber-50 border border-amber-100">
+                  <div className="flex-1 min-w-0">
+                    <button onClick={() => openCustomer(act.customerId)} className="text-xs font-bold text-amber-700 hover:underline text-left truncate block">
+                      {customer?.name ?? act.customerId}
+                    </button>
+                    <p className="text-[10px] text-gray-500 truncate">{act.summary}</p>
+                  </div>
+                  <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full flex-shrink-0 ${
+                    daysUntil === 0 ? 'bg-red-100 text-red-600' :
+                    daysUntil <= 2 ? 'bg-amber-100 text-amber-700' :
+                    'bg-blue-100 text-blue-600'
+                  }`}>
+                    {daysUntil === 0 ? 'TODAY' : daysUntil === 1 ? 'TOMORROW' : `IN ${daysUntil}D`}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {selectedCustomer && (
+        <CustomerModal customer={selectedCustomer} onClose={() => setSelectedCustomer(null)} />
+      )}
     </div>
   );
 }
