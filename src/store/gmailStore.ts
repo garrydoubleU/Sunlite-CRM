@@ -3,9 +3,11 @@ import { create } from 'zustand';
 interface GmailState {
   accessToken: string | null;
   tokenExpiry: number | null;
+  signature: string | null;
   isAuthorizing: boolean;
   authError: string | null;
   setToken: (token: string, expiresIn: number) => void;
+  setSignature: (sig: string) => void;
   clearToken: () => void;
   setAuthorizing: (v: boolean) => void;
   setError: (msg: string | null) => void;
@@ -16,6 +18,7 @@ interface GmailState {
 export const useGmailStore = create<GmailState>((set, get) => ({
   accessToken: null,
   tokenExpiry: null,
+  signature: null,
   isAuthorizing: false,
   authError: null,
 
@@ -27,8 +30,10 @@ export const useGmailStore = create<GmailState>((set, get) => ({
       isAuthorizing: false,
     }),
 
+  setSignature: (sig) => set({ signature: sig }),
+
   clearToken: () =>
-    set({ accessToken: null, tokenExpiry: null, authError: null }),
+    set({ accessToken: null, tokenExpiry: null, signature: null, authError: null }),
 
   setAuthorizing: (v) => set({ isAuthorizing: v }),
   setError: (msg) => set({ authError: msg, isAuthorizing: false }),

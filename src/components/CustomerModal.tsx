@@ -41,6 +41,7 @@ const FREQ_OPTIONS = [
 export default function CustomerModal({ customer, onClose }: CustomerModalProps) {
   const { getActivitiesForCustomer, addActivity } = useCustomerStore();
   const { currentUser } = useAuthStore();
+  const { isTokenValid, accessToken, signature } = useGmailStore();
   const activities = getActivitiesForCustomer(customer.id);
 
   // Log form state
@@ -54,12 +55,10 @@ export default function CustomerModal({ customer, onClose }: CustomerModalProps)
   const [showCompose, setShowCompose] = useState(false);
   const [emailTo, setEmailTo] = useState(customer.email ?? '');
   const [emailSubject, setEmailSubject] = useState('');
-  const [emailBody, setEmailBody] = useState('');
+  const [emailBody, setEmailBody] = useState(signature ? `\n\n--\n${signature}` : '');
   const [emailSending, setEmailSending] = useState(false);
   const [emailSent, setEmailSent] = useState(false);
   const [emailError, setEmailError] = useState('');
-
-  const { isTokenValid, accessToken } = useGmailStore();
   const hasGmailToken = isTokenValid();
 
   const nextVisit = calculateNextVisit(customer.lastContactDate, customer.visitFrequency, customer.dayOfWeek);
@@ -144,7 +143,7 @@ export default function CustomerModal({ customer, onClose }: CustomerModalProps)
       });
       setEmailSent(true);
       setEmailSubject('');
-      setEmailBody('');
+      setEmailBody(signature ? `\n\n--\n${signature}` : '');
       setTimeout(() => { setEmailSent(false); setShowCompose(false); }, 2000);
     } catch (err) {
       setEmailError(err instanceof Error ? err.message : 'Failed to send email.');

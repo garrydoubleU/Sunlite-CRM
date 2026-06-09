@@ -27,6 +27,31 @@ function makeRfc2822(params: {
     .replace(/=+$/, '');
 }
 
+// Strip HTML tags from signature (GAS sends plain text)
+function stripHtml(html: string): string {
+  return html
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/p>/gi, '\n')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .trim();
+}
+
+export async function fetchGmailSignature(accessToken: string): Promise<string> {
+  const res = await fetch(
+    'https://gmail.googleapis.com/gmail/v1/users/me/settings/sendAs',
+    { headers: { Authorization: `Bearer ${accessToken}` } }
+  );
+  if (!res.ok) return '';
+  const data = await res.json() as { sendAs?: Array<{ isPrimary?: boolean; signature?: string }> };
+  const primary = data.sendAs?.find(s => s.isPrimary) ?? data.sendAs?.[0];
+  return primary?.signature ? stripHtml(primary.signature) : '';
+}
+
 export async function sendGmailMessage(params: {
   to: string;
   subject: string;
