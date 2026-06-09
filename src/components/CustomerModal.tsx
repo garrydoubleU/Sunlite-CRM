@@ -8,6 +8,9 @@ import { useAuthStore } from '../store/authStore';
 import { calculateNextVisit, getDueDateLabel, getDueDateColor, safeFormat, safeDaysSince } from '../utils/scheduler';
 
 import { sendEmail, isGASConfigured } from '../api/sheets';
+import { sendGmailMessage } from '../api/gmail';
+import { useGmailStore } from '../store/gmailStore';
+import GmailAuthButton from './GmailAuthButton';
 
 interface CustomerModalProps {
   customer: Customer;
@@ -55,6 +58,9 @@ export default function CustomerModal({ customer, onClose }: CustomerModalProps)
   const [emailSending, setEmailSending] = useState(false);
   const [emailSent, setEmailSent] = useState(false);
   const [emailError, setEmailError] = useState('');
+
+  const { isTokenValid, accessToken } = useGmailStore();
+  const hasGmailToken = isTokenValid();
 
   const nextVisit = calculateNextVisit(customer.lastContactDate, customer.visitFrequency, customer.dayOfWeek);
   const daysAgo = safeDaysSince(customer.lastContactDate);
@@ -104,7 +110,18 @@ export default function CustomerModal({ customer, onClose }: CustomerModalProps)
     setEmailSending(true);
     setEmailError('');
     try {
-      if (isGASConfigured()) {
+      if (hasGmailToken && accessToken) {
+        // Send as the logged-in rep via Gmail API
+        await sendGmailMessage({
+          to: emailTo.trim(),
+          subject: emailSubject.trim(),
+          body: emailBody.trim(),
+          fromName: currentUser?.name ?? '',
+          fromEmail: currentUser?.email ?? '',
+          accessToken,
+        });
+      } else if (isGASConfigured()) {
+        // Fallback: send via GAS script owner's Gmail
         await sendEmail({
           to: emailTo.trim(),
           subject: emailSubject.trim(),
@@ -129,8 +146,8 @@ export default function CustomerModal({ customer, onClose }: CustomerModalProps)
       setEmailSubject('');
       setEmailBody('');
       setTimeout(() => { setEmailSent(false); setShowCompose(false); }, 2000);
-    } catch {
-      setEmailError('Failed to send. Check your GAS script has the email action.');
+    } catch (err) {
+      setEmailError(err instanceof Error ? err.message : 'Failed to send email.');
     } finally {
       setEmailSending(false);
     }
@@ -295,6 +312,19 @@ export default function CustomerModal({ customer, onClose }: CustomerModalProps)
                     </button>
                   </div>
                   <div className="p-3 space-y-2.5 bg-white">
+                    {!hasGmailToken && (
+                      <div className="p-2.5 bg-blue-50 rounded-lg border border-blue-100">
+                        <p className="text-[10px] text-blue-600 font-semibold mb-2">Connect Gmail to send as yourself</p>
+                        <GmailAuthButton />
+                        <p className="text-[10px] text-blue-400 mt-1.5">Without connecting, email sends via the script account.</p>
+                      </div>
+                    )}
+                    {hasGmailToken && (
+                      <div className="flex items-center gap-2 p-2 bg-green-50 rounded-lg border border-green-100">
+                        <span className="w-2 h-2 rounded-full bg-green-400 flex-shrink-0" />
+                        <p className="text-[10px] text-green-700 font-semibold">Sending as {currentUser?.email}</p>
+                      </div>
+                    )}
                     <div>
                       <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1">To</label>
                       <input
@@ -338,7 +368,7 @@ export default function CustomerModal({ customer, onClose }: CustomerModalProps)
                       {emailSent ? 'Sent!' : emailSending ? 'Sending...' : 'Send Email'}
                     </button>
                     <p className="text-[10px] text-gray-400 text-center">
-                      Sent via Gmail · auto-logged to activity timeline
+                      {hasGmailToken ? `Sends from ${currentUser?.email}` : 'Sends from script account'} · auto-logged
                     </p>
                   </div>
                 </div>
