@@ -417,7 +417,7 @@ export default function CustomerModal({ customer, onClose }: CustomerModalProps)
               </div>
 
               {/* Financial Performance (admin only) */}
-              {showRevenue && revenueTable.length > 0 && (
+              {revenueTable.length > 0 && (
                 <div>
                   <div className="flex items-center justify-between mb-3">
                     <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Financial Performance</p>
@@ -444,11 +444,11 @@ export default function CustomerModal({ customer, onClose }: CustomerModalProps)
                           <tr key={yr} className="border-b border-gray-50 last:border-0">
                             <td className="px-3 py-2 font-black text-gray-900">{yr}</td>
                             {(['Q1', 'Q2', 'Q3', 'Q4'] as const).map(q => (
-                              <td key={q} className="px-3 py-2 text-right text-gray-600">
+                              <td key={q} className={`px-3 py-2 text-right text-gray-600 ${!showRevenue ? 'blur-sm select-none' : ''}`}>
                                 {d[q] > 0 ? `$${d[q].toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '$0'}
                               </td>
                             ))}
-                            <td className="px-3 py-2 text-right font-black text-amber-600">
+                            <td className={`px-3 py-2 text-right font-black text-amber-600 ${!showRevenue ? 'blur-sm select-none' : ''}`}>
                               ${d.total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                             </td>
                           </tr>

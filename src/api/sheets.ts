@@ -119,13 +119,23 @@ function mapRawCustomer(r: Record<string, unknown>): GASCustomer {
   };
   const freq = freqMap[freqRaw] ?? 'monthly';
 
-  // Collect quarterly revenue columns (Q1_2023, Q2_2024, etc.)
+  // Collect quarterly revenue columns — handles Q1_2023, Q1 2023, 2023Q1, Q1-2023
   let revenue = 0;
   const revenueByQuarter: Record<string, number> = {};
   Object.entries(r).forEach(([k, v]) => {
-    if (/^Q\d_\d{4}$/.test(k) && typeof v === 'number') {
-      revenue += v;
-      revenueByQuarter[k] = v;
+    const num = typeof v === 'number' ? v : (typeof v === 'string' ? parseFloat(v) : NaN);
+    if (isNaN(num) || num === 0) return;
+    // Match Q1_2023 / Q1 2023 / Q1-2023
+    let m = k.match(/^Q(\d)[_ -](\d{4})$/i);
+    // Match 2023_Q1 / 2023 Q1
+    if (!m) m = k.match(/^(\d{4})[_ -]Q(\d)$/i) && k.match(/^(\d{4})[_ -]Q(\d)$/i);
+    if (m) {
+      // Normalise to Q1_2023 format
+      const q = m[1].length === 1 ? m[1] : m[2];
+      const yr = m[1].length === 4 ? m[1] : m[2];
+      const key = `Q${q}_${yr}`;
+      revenue += num;
+      revenueByQuarter[key] = (revenueByQuarter[key] ?? 0) + num;
     }
   });
 

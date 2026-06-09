@@ -36,7 +36,8 @@ export default function CustomerCard({ customer, onOpenModal }: CustomerCardProp
     <div className={`bg-white rounded-2xl shadow-sm border transition-all duration-200 ${
       isUntouched ? 'border-red-200' : 'border-gray-100'
     } ${expanded ? 'ring-1 ring-amber-400' : ''}`}>
-      <div className="p-4">
+      {/* Tappable card body — expands inline detail */}
+      <div className="p-4 cursor-pointer active:bg-gray-50 transition-colors" onClick={() => setExpanded(!expanded)}>
         {/* Header */}
         <div className="flex items-start justify-between mb-3">
           <div className="flex-1 min-w-0">
@@ -94,24 +95,21 @@ export default function CustomerCard({ customer, onOpenModal }: CustomerCardProp
             </div>
           )}
         </div>
-      </div>
 
-      {/* Action buttons */}
-      <div className="flex border-t border-gray-50">
-        {onOpenModal && (
-          <button
-            onClick={onOpenModal}
-            className="flex-1 px-4 py-2 flex items-center justify-center gap-1 text-xs font-semibold text-amber-600 hover:bg-amber-50 transition-colors"
-          >
-            Open Record
-          </button>
-        )}
-        <button
-          onClick={() => setExpanded(!expanded)}
-          className={`flex-1 px-4 py-2 flex items-center justify-center gap-1 text-xs font-medium text-gray-400 hover:text-amber-500 hover:bg-amber-50 transition-colors ${expanded ? '' : 'rounded-b-2xl'} ${onOpenModal ? 'border-l border-gray-50' : 'rounded-b-2xl'}`}
-        >
-          {expanded ? <><ChevronUp size={14} /> Less</> : <><ChevronDown size={14} /> More</>}
-        </button>
+        {/* Expand hint */}
+        <div className="flex items-center justify-between mt-2">
+          {onOpenModal && (
+            <button
+              onClick={e => { e.stopPropagation(); onOpenModal(); }}
+              className="text-[10px] font-bold text-amber-600 hover:underline"
+            >
+              Open Record →
+            </button>
+          )}
+          <span className="ml-auto text-[10px] text-gray-300 flex items-center gap-0.5">
+            {expanded ? <><ChevronUp size={11} /> less</> : <><ChevronDown size={11} /> more</>}
+          </span>
+        </div>
       </div>
 
       {/* Expanded detail */}
