@@ -18,6 +18,11 @@ interface CustomerModalProps {
   onClose: () => void;
 }
 
+// Parse comma-separated emails into an array
+function parseContacts(emailField: string): string[] {
+  return emailField.split(',').map(e => e.trim()).filter(Boolean);
+}
+
 const TIER_COLORS: Record<number, { bg: string; text: string; label: string }> = {
   1: { bg: 'bg-red-100', text: 'text-red-600', label: 'Level 1' },
   2: { bg: 'bg-amber-100', text: 'text-amber-600', label: 'Level 2' },
@@ -25,12 +30,6 @@ const TIER_COLORS: Record<number, { bg: string; text: string; label: string }> =
   4: { bg: 'bg-gray-100', text: 'text-gray-500', label: 'Level 4' },
 };
 
-const TYPE_ICONS: Record<ActivityType, { icon: typeof FileText; color: string }> = {
-  call:  { icon: PhoneCall,  color: 'text-blue-500 bg-blue-50' },
-  visit: { icon: Navigation, color: 'text-green-500 bg-green-50' },
-  note:  { icon: FileText,   color: 'text-gray-500 bg-gray-100' },
-  email: { icon: Mail,       color: 'text-red-500 bg-red-50' },
-};
 
 const FREQ_OPTIONS = [
   { value: '',          label: 'No Scheduled Visits' },
@@ -68,21 +67,38 @@ export default function CustomerModal({ customer, onClose }: CustomerModalProps)
   const [emailError, setEmailError] = useState('');
   const hasGmailToken = isTokenValid();
 
-  // Editable email
-  const [editingEmail, setEditingEmail] = useState(false);
-  const [emailDraft, setEmailDraft] = useState(customer.email ?? '');
-  const [savingEmail, setSavingEmail] = useState(false);
+  // Multi-contact email state
+  const [contacts, setContacts] = useState<string[]>(parseContacts(customer.email ?? ''));
+  const [addingContact, setAddingContact] = useState(false);
+  const [contactDraft, setContactDraft] = useState('');
+  const [savingContact, setSavingContact] = useState(false);
 
-  const handleSaveEmail = async () => {
-    if (!emailDraft.trim()) return;
-    setSavingEmail(true);
-    updateCustomer(customer.id, { email: emailDraft.trim() });
+  const persistContacts = async (newContacts: string[]) => {
+    const joined = newContacts.join(', ');
+    updateCustomer(customer.id, { email: joined });
     if (isGASConfigured()) {
-      await updateCustomerEmail(customer.id, emailDraft.trim()).catch(() => {});
+      await updateCustomerEmail(customer.id, joined).catch(() => {});
     }
-    setSavingEmail(false);
-    setEditingEmail(false);
-    setEmailTo(emailDraft.trim());
+  };
+
+  const handleAddContact = async () => {
+    const trimmed = contactDraft.trim();
+    if (!trimmed) return;
+    setSavingContact(true);
+    const next = [...contacts.filter(c => c !== trimmed), trimmed];
+    setContacts(next);
+    await persistContacts(next);
+    setSavingContact(false);
+    setContactDraft('');
+    setAddingContact(false);
+    if (!emailTo) setEmailTo(trimmed);
+  };
+
+  const handleRemoveContact = async (addr: string) => {
+    const next = contacts.filter(c => c !== addr);
+    setContacts(next);
+    await persistContacts(next);
+    if (emailTo === addr) setEmailTo(next[0] ?? '');
   };
 
   const daysAgo = safeDaysSince(customer.lastContactDate);
@@ -218,38 +234,53 @@ export default function CustomerModal({ customer, onClose }: CustomerModalProps)
                     <span className="truncate">{customer.phone}</span>
                   </a>
                 )}
-                {/* Editable email */}
-                {editingEmail ? (
-                  <div className="flex items-center gap-1.5 mt-1">
-                    <input
-                      value={emailDraft}
-                      onChange={e => setEmailDraft(e.target.value)}
-                      placeholder="email@example.com"
-                      className="bg-white/10 text-white text-xs rounded-lg px-2 py-1 outline-none border border-white/20 focus:border-amber-400 w-40"
-                      autoFocus
-                      onKeyDown={e => { if (e.key === 'Enter') handleSaveEmail(); if (e.key === 'Escape') setEditingEmail(false); }}
-                    />
-                    <button onClick={handleSaveEmail} disabled={savingEmail} className="text-[10px] font-bold bg-amber-500 text-white px-2 py-1 rounded-lg whitespace-nowrap">
-                      {savingEmail ? '…' : 'Save'}
+                {/* Multi-contact emails */}
+                <div className="mt-1 space-y-1">
+                  {contacts.map(addr => (
+                    <div key={addr} className="flex items-center gap-1.5 group">
+                      <Mail size={11} className="text-blue-300 flex-shrink-0" />
+                      <button
+                        onClick={() => { setEmailTo(addr); setShowCompose(true); }}
+                        className="text-blue-200 text-xs hover:text-amber-300 truncate transition-colors"
+                      >
+                        {addr}
+                      </button>
+                      <button
+                        onClick={() => handleRemoveContact(addr)}
+                        className="text-blue-400/40 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-all ml-auto flex-shrink-0"
+                        title="Remove contact"
+                      >
+                        <X size={10} />
+                      </button>
+                    </div>
+                  ))}
+                  {addingContact ? (
+                    <div className="flex items-center gap-1.5 mt-1">
+                      <input
+                        value={contactDraft}
+                        onChange={e => setContactDraft(e.target.value)}
+                        placeholder="email@example.com"
+                        className="bg-white/10 text-white text-xs rounded-lg px-2 py-1 outline-none border border-white/20 focus:border-amber-400 w-40"
+                        autoFocus
+                        onKeyDown={e => { if (e.key === 'Enter') handleAddContact(); if (e.key === 'Escape') setAddingContact(false); }}
+                      />
+                      <button onClick={handleAddContact} disabled={savingContact} className="text-[10px] font-bold bg-amber-500 text-white px-2 py-1 rounded-lg whitespace-nowrap">
+                        {savingContact ? '…' : 'Add'}
+                      </button>
+                      <button onClick={() => setAddingContact(false)} className="text-blue-300 hover:text-white p-0.5">
+                        <X size={12} />
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => setAddingContact(true)}
+                      className="flex items-center gap-1 mt-1 text-[10px] font-semibold text-amber-400 hover:text-amber-300 transition-colors"
+                    >
+                      <Plus size={10} />
+                      {contacts.length === 0 ? 'Add email address' : 'Add another contact'}
                     </button>
-                    <button onClick={() => setEditingEmail(false)} className="text-blue-300 hover:text-white p-0.5">
-                      <X size={12} />
-                    </button>
-                  </div>
-                ) : customer.email ? (
-                  <div className="flex items-center gap-1.5 mt-0.5">
-                    <Mail size={11} className="text-blue-300 flex-shrink-0" />
-                    <span className="text-blue-200 text-xs truncate">{customer.email}</span>
-                    <button onClick={() => setEditingEmail(true)} className="text-[9px] font-bold text-amber-400 hover:text-amber-300 border border-amber-400/40 hover:border-amber-300 rounded px-1.5 py-0.5 ml-1 transition-colors">
-                      edit
-                    </button>
-                  </div>
-                ) : (
-                  <button onClick={() => setEditingEmail(true)} className="flex items-center gap-1.5 mt-1 text-xs font-semibold bg-amber-500 hover:bg-amber-400 text-white rounded-lg px-3 py-1.5 transition-colors">
-                    <Mail size={12} />
-                    Add email address
-                  </button>
-                )}
+                  )}
+                </div>
               </div>
             </div>
             <div className="flex items-center gap-2 flex-shrink-0 mt-1">
@@ -293,7 +324,7 @@ export default function CustomerModal({ customer, onClose }: CustomerModalProps)
             </div>
           </div>
           {/* Action bar */}
-          {(customer.email || emailDraft) && (
+          {contacts.length > 0 && (
             <div className="mt-4 pt-3 border-t border-white/10">
               <button
                 onClick={() => setShowCompose(!showCompose)}
@@ -432,12 +463,25 @@ export default function CustomerModal({ customer, onClose }: CustomerModalProps)
                     )}
                     <div>
                       <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1">To</label>
-                      <input
-                        value={emailTo}
-                        onChange={e => setEmailTo(e.target.value)}
-                        placeholder="recipient@example.com"
-                        className="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-700 outline-none focus:border-amber-400"
-                      />
+                      {contacts.length > 1 ? (
+                        <div className="relative">
+                          <select
+                            value={emailTo}
+                            onChange={e => setEmailTo(e.target.value)}
+                            className="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-700 outline-none appearance-none focus:border-amber-400"
+                          >
+                            {contacts.map(c => <option key={c} value={c}>{c}</option>)}
+                          </select>
+                          <ChevronDown size={13} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                        </div>
+                      ) : (
+                        <input
+                          value={emailTo}
+                          onChange={e => setEmailTo(e.target.value)}
+                          placeholder="recipient@example.com"
+                          className="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-700 outline-none focus:border-amber-400"
+                        />
+                      )}
                     </div>
                     <div>
                       <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1">Subject</label>
@@ -626,47 +670,115 @@ export default function CustomerModal({ customer, onClose }: CustomerModalProps)
               <p className="text-xs font-black text-gray-800 uppercase tracking-wider mb-1">Recent Activity</p>
               <p className="text-[10px] text-gray-400 mb-4">Complete interaction timeline for this account.</p>
 
-              <div className="space-y-3 max-h-80 md:max-h-[420px] overflow-y-auto pr-1">
+              <div className="space-y-2.5 max-h-80 md:max-h-[460px] overflow-y-auto pr-1">
                 {activities.length === 0 && (
                   <div className="text-center py-8">
                     <p className="text-xs text-gray-400">No activity logged yet.</p>
                   </div>
                 )}
                 {activities.map(activity => {
-                  const { icon: Icon, color } = TYPE_ICONS[activity.type];
-                  return (
-                    <div key={activity.id} className="flex gap-3">
-                      <div className={`w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 ${color}`}>
-                        <Icon size={12} />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between mb-0.5">
-                          <span className="text-[10px] font-bold text-gray-500 uppercase">{activity.type}</span>
-                          <span className="text-[10px] text-gray-400">{safeFormat(activity.date, 'MMM d')}</span>
+                  const isEmailEntry = activity.type === 'email' || looksLikeEmail(activity.summary);
+                  const parsed = isEmailEntry ? parseEmailSummary(activity.summary) : null;
+
+                  if (isEmailEntry) {
+                    const isSent = parsed?.direction === 'sent' || (!parsed?.direction && activity.type === 'email');
+                    return (
+                      <div key={activity.id} className="rounded-xl border border-red-100 bg-white overflow-hidden">
+                        <div className={`flex items-center gap-2 px-3 py-1.5 ${isSent ? 'bg-red-50' : 'bg-green-50'}`}>
+                          <div className={`w-5 h-5 rounded-md flex items-center justify-center flex-shrink-0 ${isSent ? 'bg-red-100' : 'bg-green-100'}`}>
+                            {isSent
+                              ? <ArrowUpRight size={11} className="text-red-500" />
+                              : <ArrowDownLeft size={11} className="text-green-600" />}
+                          </div>
+                          <span className={`text-[10px] font-black uppercase tracking-wider ${isSent ? 'text-red-500' : 'text-green-600'}`}>
+                            {isSent ? 'Email Sent' : 'Email Received'}
+                          </span>
+                          {parsed?.address && (
+                            <span className="text-[10px] text-gray-400 truncate flex-1">{parsed.address}</span>
+                          )}
+                          <span className="text-[10px] text-gray-400 flex-shrink-0 ml-auto">{safeFormat(activity.date, 'MMM d')}</span>
                         </div>
-                        {(() => {
-                          const isEmail = activity.type === 'email' || looksLikeEmail(activity.summary);
-                          const email = isEmail ? parseEmailSummary(activity.summary) : null;
-                          if (email) return (
-                            <div className="mt-0.5 bg-white rounded-lg border border-gray-200 overflow-hidden">
-                              <div className="flex items-center gap-1 px-2 py-0.5 bg-gray-50 border-b border-gray-100">
-                                {email.direction === 'sent'
-                                  ? <ArrowUpRight size={9} className="text-blue-400 flex-shrink-0" />
-                                  : <ArrowDownLeft size={9} className="text-green-500 flex-shrink-0" />}
-                                <span className="text-[9px] font-bold text-gray-400 uppercase">
-                                  {email.direction === 'sent' ? 'Sent' : 'Received'}
-                                </span>
-                                {email.address && <span className="text-[9px] text-gray-400 truncate">{email.address}</span>}
-                              </div>
-                              <div className="px-2 py-1">
-                                <p className="text-[11px] font-semibold text-gray-800 leading-snug">{email.subject}</p>
-                                {email.body && <p className="text-[10px] text-gray-500 mt-0.5 line-clamp-2 leading-relaxed">{email.body}</p>}
-                              </div>
+                        <div className="px-3 py-2">
+                          {parsed?.subject
+                            ? <>
+                                <p className="text-[11px] font-bold text-gray-800 leading-snug">{parsed.subject}</p>
+                                {parsed.body && <p className="text-[10px] text-gray-500 mt-1 line-clamp-3 leading-relaxed">{parsed.body}</p>}
+                              </>
+                            : <p className="text-[11px] text-gray-600 leading-relaxed line-clamp-2">{activity.summary.replace(/^\[[^\]]+\]\s*/, '')}</p>
+                          }
+                          <p className="text-[10px] text-gray-400 mt-1">{activity.repName}</p>
+                        </div>
+                      </div>
+                    );
+                  }
+
+                  if (activity.type === 'call') {
+                    return (
+                      <div key={activity.id} className="rounded-xl border border-blue-100 bg-white overflow-hidden">
+                        <div className="flex items-center gap-2 px-3 py-1.5 bg-blue-50">
+                          <div className="w-5 h-5 rounded-md bg-blue-100 flex items-center justify-center flex-shrink-0">
+                            <PhoneCall size={11} className="text-blue-600" />
+                          </div>
+                          <span className="text-[10px] font-black text-blue-600 uppercase tracking-wider">Phone Call</span>
+                          <span className="text-[10px] text-gray-400 ml-auto flex-shrink-0">{safeFormat(activity.date, 'MMM d')}</span>
+                        </div>
+                        <div className="px-3 py-2">
+                          <p className="text-[11px] text-gray-700 leading-relaxed">{activity.summary}</p>
+                          {activity.followUpDate && (
+                            <div className="flex items-center gap-1 mt-1.5">
+                              <Clock size={9} className="text-amber-500" />
+                              <span className="text-[10px] text-amber-600 font-semibold">Follow-up: {safeFormat(activity.followUpDate, 'MMM d')}</span>
                             </div>
-                          );
-                          return <p className="text-xs text-gray-700 leading-relaxed">{activity.summary}</p>;
-                        })()}
-                        <p className="text-[10px] text-gray-400 mt-0.5">{activity.repName}</p>
+                          )}
+                          <p className="text-[10px] text-gray-400 mt-1">{activity.repName}</p>
+                        </div>
+                      </div>
+                    );
+                  }
+
+                  if (activity.type === 'visit') {
+                    return (
+                      <div key={activity.id} className="rounded-xl border border-green-100 bg-white overflow-hidden">
+                        <div className="flex items-center gap-2 px-3 py-1.5 bg-green-50">
+                          <div className="w-5 h-5 rounded-md bg-green-100 flex items-center justify-center flex-shrink-0">
+                            <Navigation size={11} className="text-green-600" />
+                          </div>
+                          <span className="text-[10px] font-black text-green-600 uppercase tracking-wider">Field Visit</span>
+                          <span className="text-[10px] text-gray-400 ml-auto flex-shrink-0">{safeFormat(activity.date, 'MMM d')}</span>
+                        </div>
+                        <div className="px-3 py-2">
+                          <p className="text-[11px] text-gray-700 leading-relaxed">{activity.summary}</p>
+                          {activity.followUpDate && (
+                            <div className="flex items-center gap-1 mt-1.5">
+                              <Clock size={9} className="text-amber-500" />
+                              <span className="text-[10px] text-amber-600 font-semibold">Follow-up: {safeFormat(activity.followUpDate, 'MMM d')}</span>
+                            </div>
+                          )}
+                          <p className="text-[10px] text-gray-400 mt-1">{activity.repName}</p>
+                        </div>
+                      </div>
+                    );
+                  }
+
+                  // Note (default)
+                  return (
+                    <div key={activity.id} className="rounded-xl border border-gray-200 bg-white overflow-hidden">
+                      <div className="flex items-center gap-2 px-3 py-1.5 bg-gray-50">
+                        <div className="w-5 h-5 rounded-md bg-gray-100 flex items-center justify-center flex-shrink-0">
+                          <FileText size={11} className="text-gray-500" />
+                        </div>
+                        <span className="text-[10px] font-black text-gray-500 uppercase tracking-wider">Note</span>
+                        <span className="text-[10px] text-gray-400 ml-auto flex-shrink-0">{safeFormat(activity.date, 'MMM d')}</span>
+                      </div>
+                      <div className="px-3 py-2">
+                        <p className="text-[11px] text-gray-700 leading-relaxed">{activity.summary}</p>
+                        {activity.followUpDate && (
+                          <div className="flex items-center gap-1 mt-1.5">
+                            <Clock size={9} className="text-amber-500" />
+                            <span className="text-[10px] text-amber-600 font-semibold">Follow-up: {safeFormat(activity.followUpDate, 'MMM d')}</span>
+                          </div>
+                        )}
+                        <p className="text-[10px] text-gray-400 mt-1">{activity.repName}</p>
                       </div>
                     </div>
                   );
