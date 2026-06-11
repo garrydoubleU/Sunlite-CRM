@@ -1,10 +1,11 @@
 import { useState } from 'react';
-import { AlertTriangle, Calendar, TrendingUp, Phone, CheckCircle, Clock } from 'lucide-react';
+import { AlertTriangle, Calendar, TrendingUp, Clock } from 'lucide-react';
 import { useCustomerStore } from '../store/customerStore';
 import { useAuthStore } from '../store/authStore';
 import { calculateNextVisit, getDaysUntil, getDueDateColor, safeDaysSince, safeFormat } from '../utils/scheduler';
 import RoutePlanner from '../components/RoutePlanner';
 import CustomerModal from '../components/CustomerModal';
+import CallerDashboard from './CallerDashboard';
 import type { Customer } from '../types';
 
 export default function Dashboard() {
@@ -19,7 +20,10 @@ export default function Dashboard() {
     );
     if (found) setSelectedCustomer(found);
   }
-  const isInsideOrCS = role === 'inside_sales' || role === 'customer_service';
+  // Caller role (inside_sales) gets its own focused queue dashboard
+  if (role === 'inside_sales' || role === 'customer_service') {
+    return <CallerDashboard />;
+  }
 
   // ── Shared stats ──────────────────────────────────────────────
   const untouchedCustomers = customers
@@ -53,181 +57,6 @@ export default function Dashboard() {
     .sort((a, b) => a.nextVisit.getTime() - b.nextVisit.getTime())
     .slice(0, 6);
 
-  // ── Inside Sales: call queue = untouched tier 1-2 first, then by days ──
-  const callQueue = customers
-    .filter(c => c.activeStatus && safeDaysSince(c.lastContactDate) >= 14)
-    .sort((a, b) => {
-      if (a.priorityTier !== b.priorityTier) return a.priorityTier - b.priorityTier;
-      return safeDaysSince(b.lastContactDate) - safeDaysSince(a.lastContactDate);
-    })
-    .slice(0, 20);
-
-  const calledToday = activities.filter(a => {
-    const d = new Date(a.date);
-    const now = new Date();
-    return (a.type === 'call' || a.type === 'note') &&
-      d.getFullYear() === now.getFullYear() &&
-      d.getMonth() === now.getMonth() &&
-      d.getDate() === now.getDate();
-  });
-
-  // ── Render: Inside Sales / Customer Service ───────────────────
-  if (isInsideOrCS) {
-    return (
-      <div className="space-y-5">
-        {/* Top stat row */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
-            <div className="w-9 h-9 bg-blue-100 rounded-xl flex items-center justify-center mb-2">
-              <Phone size={17} className="text-blue-600" />
-            </div>
-            <p className="text-3xl font-black text-gray-900">{callQueue.length}</p>
-            <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mt-0.5">Calls Overdue</p>
-            <p className="text-[10px] text-gray-400">14+ days no contact</p>
-          </div>
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
-            <div className="w-9 h-9 bg-green-100 rounded-xl flex items-center justify-center mb-2">
-              <CheckCircle size={17} className="text-green-600" />
-            </div>
-            <p className="text-3xl font-black text-gray-900">{calledToday.length}</p>
-            <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mt-0.5">Logged Today</p>
-            <p className="text-[10px] text-gray-400">Calls & notes</p>
-          </div>
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
-            <div className="w-9 h-9 bg-red-100 rounded-xl flex items-center justify-center mb-2">
-              <AlertTriangle size={17} className="text-red-500" />
-            </div>
-            <p className="text-3xl font-black text-gray-900">{untouchedCustomers.length}</p>
-            <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mt-0.5">Untouched 30d+</p>
-            <p className="text-[10px] text-gray-400">Needs attention</p>
-          </div>
-          <div className="bg-[#0F2A4A] rounded-2xl shadow-sm p-4 text-white">
-            <p className="text-[10px] font-bold text-white/50 uppercase tracking-wider mb-2">Tier Breakdown</p>
-            <div className="grid grid-cols-2 gap-1.5">
-              {([1, 2, 3, 4] as const).map(t => (
-                <div key={t} className="bg-white/10 rounded-lg p-1.5 text-center">
-                  <p className="text-lg font-black text-white">{tierCounts[t]}</p>
-                  <p className="text-[9px] text-white/50">T{t}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        {/* Main content: call queue + recent activity */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-          {/* Call queue */}
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-xs font-black text-gray-800 uppercase tracking-wider">Call Queue</h3>
-              <span className="text-[10px] font-bold bg-blue-100 text-blue-600 px-2.5 py-1 rounded-full uppercase">
-                Priority order
-              </span>
-            </div>
-            <div className="space-y-2 max-h-[480px] overflow-y-auto pr-1">
-              {callQueue.map(c => {
-                const days = safeDaysSince(c.lastContactDate);
-                const tier = c.priorityTier;
-                return (
-                  <div key={c.id} className="flex items-center gap-3 p-3 rounded-xl bg-gray-50 hover:bg-blue-50 transition-colors cursor-pointer" onClick={() => setSelectedCustomer(c)}>
-                    <div className={`w-7 h-7 rounded-lg flex items-center justify-center text-[10px] font-black flex-shrink-0 ${
-                      tier === 1 ? 'bg-red-100 text-red-600' :
-                      tier === 2 ? 'bg-amber-100 text-amber-600' :
-                      'bg-gray-100 text-gray-500'
-                    }`}>T{tier}</div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs font-bold text-amber-600 hover:underline truncate">{c.name}</p>
-                      <p className="text-[10px] text-gray-400">{c.phone || 'No phone'}</p>
-                    </div>
-                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full flex-shrink-0 ${
-                      days >= 60 ? 'bg-red-100 text-red-600' :
-                      days >= 30 ? 'bg-amber-100 text-amber-600' :
-                      'bg-gray-100 text-gray-500'
-                    }`}>{days}d</span>
-                  </div>
-                );
-              })}
-              {callQueue.length === 0 && (
-                <p className="text-xs text-gray-400 text-center py-8">All accounts are up to date.</p>
-              )}
-            </div>
-          </div>
-
-          {/* Recent activity */}
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-            <h3 className="text-xs font-black text-gray-800 uppercase tracking-wider mb-4">Recent Activity</h3>
-            <div className="space-y-3 max-h-[480px] overflow-y-auto pr-1">
-              {recentActivities.map(act => {
-                const customer = customers.find(c =>
-                  c.id === act.customerId ||
-                  c.name.toLowerCase() === act.customerId.toLowerCase()
-                );
-                const colors: Record<string, string> = {
-                  call: 'bg-blue-100 text-blue-600',
-                  visit: 'bg-green-100 text-green-600',
-                  note: 'bg-gray-100 text-gray-600',
-                  email: 'bg-red-100 text-red-500',
-                };
-                return (
-                  <div key={act.id} className="flex gap-3">
-                    <span className={`text-[9px] font-bold px-2 py-1 rounded-full uppercase self-start flex-shrink-0 ${colors[act.type]}`}>
-                      {act.type}
-                    </span>
-                    <div className="flex-1 min-w-0">
-                      <button onClick={() => openCustomer(act.customerId)} className="text-xs font-semibold text-amber-600 hover:underline text-left truncate block w-full">
-                        {customer?.name ?? act.customerId}
-                      </button>
-                      <p className="text-xs text-gray-500 leading-relaxed line-clamp-2">{act.summary}</p>
-                      <p className="text-[10px] text-gray-400 mt-0.5">{act.repName} · {safeFormat(act.date, 'MMM d')}</p>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-
-        {/* Upcoming follow-ups */}
-        {upcomingFollowUps.length > 0 && (
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-            <div className="flex items-center gap-2 mb-4">
-              <Clock size={15} className="text-amber-500" />
-              <h3 className="text-xs font-black text-gray-800 uppercase tracking-wider">Upcoming Follow-ups</h3>
-            </div>
-            <div className="space-y-2">
-              {upcomingFollowUps.map(act => {
-                const customer = customers.find(c =>
-                  c.id === act.customerId || c.name.toLowerCase() === act.customerId.toLowerCase()
-                );
-                const daysUntil = Math.ceil((new Date(act.followUpDate!).getTime() - now.getTime()) / 86400000);
-                return (
-                  <div key={act.id} className="flex items-center gap-3 p-3 rounded-xl bg-amber-50 border border-amber-100">
-                    <div className="flex-1 min-w-0">
-                      <button onClick={() => openCustomer(act.customerId)} className="text-xs font-bold text-amber-700 hover:underline text-left truncate block">
-                        {customer?.name ?? act.customerId}
-                      </button>
-                      <p className="text-[10px] text-gray-500 truncate">{act.summary}</p>
-                    </div>
-                    <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full flex-shrink-0 ${
-                      daysUntil === 0 ? 'bg-red-100 text-red-600' :
-                      daysUntil <= 2 ? 'bg-amber-100 text-amber-700' :
-                      'bg-blue-100 text-blue-600'
-                    }`}>
-                      {daysUntil === 0 ? 'TODAY' : daysUntil === 1 ? 'TOMORROW' : `IN ${daysUntil}D`}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
-
-        {selectedCustomer && (
-          <CustomerModal customer={selectedCustomer} onClose={() => setSelectedCustomer(null)} />
-        )}
-      </div>
-    );
-  }
 
   // ── Render: Field Sales / Admin ───────────────────────────────
   return (
