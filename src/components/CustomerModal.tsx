@@ -85,10 +85,27 @@ export default function CustomerModal({ customer, onClose }: CustomerModalProps)
     setEmailTo(emailDraft.trim());
   };
 
-  const nextVisit = calculateNextVisit(customer.lastContactDate, customer.visitFrequency, customer.dayOfWeek);
   const daysAgo = safeDaysSince(customer.lastContactDate);
   const tier = TIER_COLORS[customer.priorityTier];
-  const showVisitSchedule = customer.visitFrequency === 'weekly' || customer.visitFrequency === 'biweekly';
+  const showVisitSchedule = ['weekly', 'biweekly', 'monthly', ''].includes(customer.visitFrequency);
+
+  // Editable visit schedule
+  const [schedFreq, setSchedFreq] = useState<'weekly' | 'biweekly' | 'monthly'>(customer.visitFrequency ?? 'monthly');
+  const [schedDate, setSchedDate] = useState(safeFormat(customer.lastContactDate, 'yyyy-MM-dd', ''));
+  const schedChanged = schedFreq !== (customer.visitFrequency ?? '') || schedDate !== safeFormat(customer.lastContactDate, 'yyyy-MM-dd', '');
+  const [savingSchedule, setSavingSchedule] = useState(false);
+  const [savedSchedule, setSavedSchedule] = useState(false);
+
+  const handleSaveSchedule = async () => {
+    setSavingSchedule(true);
+    updateCustomer(customer.id, { visitFrequency: schedFreq as Customer['visitFrequency'] });
+    await new Promise(r => setTimeout(r, 500));
+    setSavingSchedule(false);
+    setSavedSchedule(true);
+    setTimeout(() => setSavedSchedule(false), 2000);
+  };
+
+  const previewVisit = calculateNextVisit(schedDate || customer.lastContactDate, schedFreq as Customer['visitFrequency'] || 'monthly', customer.dayOfWeek);
 
   // Build quarterly revenue table: { year: { Q1, Q2, Q3, Q4 } }
   const revenueTable = useMemo(() => {
@@ -203,30 +220,34 @@ export default function CustomerModal({ customer, onClose }: CustomerModalProps)
                 )}
                 {/* Editable email */}
                 {editingEmail ? (
-                  <div className="flex items-center gap-2 mt-1">
+                  <div className="flex items-center gap-1.5 mt-1">
                     <input
                       value={emailDraft}
                       onChange={e => setEmailDraft(e.target.value)}
                       placeholder="email@example.com"
-                      className="bg-white/10 text-white text-xs rounded-lg px-2 py-1 outline-none border border-white/20 focus:border-amber-400 w-44"
+                      className="bg-white/10 text-white text-xs rounded-lg px-2 py-1 outline-none border border-white/20 focus:border-amber-400 w-40"
                       autoFocus
                       onKeyDown={e => { if (e.key === 'Enter') handleSaveEmail(); if (e.key === 'Escape') setEditingEmail(false); }}
                     />
-                    <button onClick={handleSaveEmail} disabled={savingEmail} className="text-[10px] font-bold bg-amber-500 text-white px-2 py-1 rounded-lg">
-                      {savingEmail ? '...' : 'Save'}
+                    <button onClick={handleSaveEmail} disabled={savingEmail} className="text-[10px] font-bold bg-amber-500 text-white px-2 py-1 rounded-lg whitespace-nowrap">
+                      {savingEmail ? '…' : 'Save'}
                     </button>
-                    <button onClick={() => setEditingEmail(false)} className="text-[10px] text-blue-300 hover:text-white px-1">✕</button>
+                    <button onClick={() => setEditingEmail(false)} className="text-blue-300 hover:text-white p-0.5">
+                      <X size={12} />
+                    </button>
                   </div>
                 ) : customer.email ? (
-                  <button onClick={() => setEditingEmail(true)} className="flex items-center gap-1 text-blue-200 text-xs hover:text-white group">
-                    <Mail size={11} className="flex-shrink-0" />
-                    <span className="truncate">{customer.email}</span>
-                    <span className="text-[9px] text-white/30 group-hover:text-white/60 ml-1">edit</span>
-                  </button>
+                  <div className="flex items-center gap-1.5 mt-0.5">
+                    <Mail size={11} className="text-blue-300 flex-shrink-0" />
+                    <span className="text-blue-200 text-xs truncate">{customer.email}</span>
+                    <button onClick={() => setEditingEmail(true)} className="text-[9px] font-bold text-amber-400 hover:text-amber-300 border border-amber-400/40 hover:border-amber-300 rounded px-1.5 py-0.5 ml-1 transition-colors">
+                      edit
+                    </button>
+                  </div>
                 ) : (
-                  <button onClick={() => setEditingEmail(true)} className="flex items-center gap-1 text-blue-300/60 text-xs hover:text-white border border-dashed border-white/20 hover:border-white/40 rounded px-2 py-0.5 mt-1 transition-colors">
-                    <Mail size={11} />
-                    <span>Add email address</span>
+                  <button onClick={() => setEditingEmail(true)} className="flex items-center gap-1.5 mt-1 text-xs font-semibold bg-amber-500 hover:bg-amber-400 text-white rounded-lg px-3 py-1.5 transition-colors">
+                    <Mail size={12} />
+                    Add email address
                   </button>
                 )}
               </div>
@@ -296,58 +317,63 @@ export default function CustomerModal({ customer, onClose }: CustomerModalProps)
             {/* Left column — capped so right column always shows */}
             <div className="w-full md:max-w-[58%] min-w-0 p-4 md:p-5 space-y-5 md:border-r border-gray-100 overflow-hidden">
 
-              {/* Field Visit Schedule — only for weekly/biweekly accounts */}
-              {showVisitSchedule && <div>
-                <div className="flex items-center justify-between mb-3">
+              {/* Field Visit Schedule */}
+              {showVisitSchedule && (
+                <div className="space-y-2">
                   <div className="flex items-center gap-2">
-                    <Calendar size={15} className="text-amber-500" />
-                    <p className="text-xs font-black text-gray-800 uppercase tracking-wider">Field Visit Schedule</p>
+                    <Calendar size={13} className="text-amber-500" />
+                    <p className="text-[11px] font-black text-gray-700 uppercase tracking-wider">Visit Schedule</p>
                   </div>
-                  <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full uppercase ${
-                    customer.visitFrequency !== 'monthly' ? 'bg-green-100 text-green-600' : 'bg-gray-100 text-gray-500'
-                  }`}>
-                    {customer.visitFrequency ? customer.visitFrequency : 'Unscheduled'}
-                  </span>
-                </div>
-                <p className="text-xs text-gray-400 mb-3">Establish regular physical routing touches for this account.</p>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1.5">Visit Frequency</label>
-                    <div className="relative">
-                      <select
-                        value={customer.visitFrequency}
-                        className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm text-gray-700 outline-none appearance-none focus:border-amber-400 transition-colors"
-                        onChange={() => {}}
-                      >
-                        {FREQ_OPTIONS.map(o => (
-                          <option key={o.value} value={o.value}>{o.label}</option>
-                        ))}
-                      </select>
-                      <ChevronDown size={13} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1">Frequency</label>
+                      <div className="relative">
+                        <select
+                          value={schedFreq}
+                          onChange={e => setSchedFreq(e.target.value as 'weekly' | 'biweekly' | 'monthly')}
+                          className="w-full bg-gray-50 border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs text-gray-700 outline-none appearance-none focus:border-amber-400 transition-colors"
+                        >
+                          {FREQ_OPTIONS.map(o => (
+                            <option key={o.value} value={o.value}>{o.label}</option>
+                          ))}
+                        </select>
+                        <ChevronDown size={11} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1">Start Date</label>
+                      <input
+                        type="date"
+                        value={schedDate}
+                        onChange={e => setSchedDate(e.target.value)}
+                        className="w-full bg-gray-50 border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs text-gray-700 outline-none focus:border-amber-400 transition-colors"
+                      />
                     </div>
                   </div>
-                  <div>
-                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1.5">Route Commencement Date</label>
-                    <input
-                      type="date"
-                      defaultValue={safeFormat(customer.lastContactDate, 'yyyy-MM-dd', '')}
-                      className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm text-gray-700 outline-none focus:border-amber-400 transition-colors"
-                    />
+                  <div className="flex items-center justify-between bg-gray-50 rounded-lg px-3 py-2 border border-gray-100">
+                    <div className="flex items-center gap-1.5">
+                      <Clock size={11} className="text-gray-400" />
+                      <span className="text-[11px] text-gray-600">Next: <span className="font-bold text-gray-800">{safeFormat(previewVisit.toISOString(), 'EEE, MMM d')}</span></span>
+                    </div>
+                    <span className={`text-[10px] font-black px-2 py-0.5 rounded-full uppercase ${getDueDateColor(previewVisit)}`}>
+                      {getDueDateLabel(previewVisit)}
+                    </span>
                   </div>
+                  {schedChanged && (
+                    <button
+                      onClick={handleSaveSchedule}
+                      disabled={savingSchedule}
+                      className={`w-full py-1.5 rounded-lg text-xs font-bold transition-all ${
+                        savedSchedule ? 'bg-green-500 text-white' :
+                        savingSchedule ? 'bg-gray-200 text-gray-400' :
+                        'bg-amber-500 hover:bg-amber-600 text-white'
+                      }`}
+                    >
+                      {savedSchedule ? '✓ Schedule Saved' : savingSchedule ? 'Saving…' : 'Save Visit Schedule'}
+                    </button>
+                  )}
                 </div>
-
-                {/* Next visit preview */}
-                <div className="mt-3 p-3 bg-gray-50 rounded-xl border border-gray-100 flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Clock size={13} className="text-gray-400" />
-                    <span className="text-xs text-gray-600">Next visit: <span className="font-bold text-gray-800">{safeFormat(nextVisit.toISOString(), 'EEE, MMM d yyyy')}</span></span>
-                  </div>
-                  <span className={`text-[10px] font-black px-2.5 py-1 rounded-full uppercase ${getDueDateColor(nextVisit)}`}>
-                    {getDueDateLabel(nextVisit)}
-                  </span>
-                </div>
-              </div>}
+              )}
 
               {/* Compose Email */}
               {showCompose && (
@@ -454,68 +480,52 @@ export default function CustomerModal({ customer, onClose }: CustomerModalProps)
               )}
 
               {/* Log Quick Note */}
-              <div>
-                <div className="flex items-center gap-2 mb-1">
-                  <Plus size={15} className="text-amber-500" />
-                  <p className="text-xs font-black text-gray-800 uppercase tracking-wider">Log Quick Note</p>
+              <div className="space-y-2">
+                <div className="flex items-center gap-1.5">
+                  <Plus size={13} className="text-amber-500" />
+                  <p className="text-[11px] font-black text-gray-700 uppercase tracking-wider">Log Activity</p>
                 </div>
-                <p className="text-xs text-gray-400 mb-3">Record a new interaction or update account status.</p>
-
-                <div className="space-y-3">
-                  <div>
-                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1.5">Notes</label>
-                    <textarea
-                      value={notes}
-                      onChange={e => setNotes(e.target.value)}
-                      placeholder="What was discussed?"
-                      rows={3}
-                      className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm text-gray-700 outline-none resize-none focus:border-amber-400 transition-colors"
-                    />
+                <textarea
+                  value={notes}
+                  onChange={e => setNotes(e.target.value)}
+                  placeholder="What was discussed?"
+                  rows={2}
+                  className="w-full bg-gray-50 border border-gray-200 rounded-lg px-2.5 py-2 text-xs text-gray-700 outline-none resize-none focus:border-amber-400 transition-colors"
+                />
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="relative">
+                    <select
+                      value={logType}
+                      onChange={e => setLogType(e.target.value as ActivityType)}
+                      className="w-full bg-gray-50 border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs text-gray-700 outline-none appearance-none focus:border-amber-400 transition-colors"
+                    >
+                      <option value="call">Phone Call</option>
+                      <option value="visit">Field Visit</option>
+                      <option value="email">Email</option>
+                      <option value="note">Note</option>
+                    </select>
+                    <ChevronDown size={11} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
                   </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1.5">Type</label>
-                      <div className="relative">
-                        <select
-                          value={logType}
-                          onChange={e => setLogType(e.target.value as ActivityType)}
-                          className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm text-gray-700 outline-none appearance-none focus:border-amber-400 transition-colors"
-                        >
-                          <option value="call">Phone Call</option>
-                          <option value="visit">Field Visit</option>
-                          <option value="email">Email</option>
-                          <option value="note">Note</option>
-                        </select>
-                        <ChevronDown size={13} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
-                      </div>
-                    </div>
-                    <div>
-                      <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1.5">Follow Up</label>
-                      <input
-                        type="date"
-                        value={followUp}
-                        onChange={e => setFollowUp(e.target.value)}
-                        className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm text-gray-700 outline-none focus:border-amber-400 transition-colors"
-                      />
-                    </div>
-                  </div>
-
-                  <button
-                    onClick={handleSave}
-                    disabled={!notes.trim() || saving}
-                    className={`w-full py-3 rounded-xl font-bold text-sm transition-all ${
-                      saved ? 'bg-green-500 text-white' :
-                      saving ? 'bg-gray-200 text-gray-400' :
-                      notes.trim() ? 'bg-[#0F2A4A] hover:bg-[#1a3a5c] text-white' :
-                      'bg-gray-100 text-gray-400'
-                    }`}
-                  >
-                    {saved ? '✓ Saved!' : saving ? 'Saving...' : 'Update Hub Record'}
-                  </button>
-                  <p className="text-[10px] text-gray-400 text-center">
-                    Changes sync to the master record and activity log automatically.
-                  </p>
+                  <input
+                    type="date"
+                    value={followUp}
+                    onChange={e => setFollowUp(e.target.value)}
+                    placeholder="Follow-up date"
+                    className="w-full bg-gray-50 border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs text-gray-700 outline-none focus:border-amber-400 transition-colors"
+                  />
                 </div>
+                <button
+                  onClick={handleSave}
+                  disabled={!notes.trim() || saving}
+                  className={`w-full py-2 rounded-lg font-bold text-xs transition-all ${
+                    saved ? 'bg-green-500 text-white' :
+                    saving ? 'bg-gray-200 text-gray-400' :
+                    notes.trim() ? 'bg-[#0F2A4A] hover:bg-[#1a3a5c] text-white' :
+                    'bg-gray-100 text-gray-400'
+                  }`}
+                >
+                  {saved ? '✓ Saved' : saving ? 'Saving…' : 'Save Activity'}
+                </button>
               </div>
 
               {/* Financial Performance */}
