@@ -7,7 +7,7 @@ import { useCustomerStore } from '../store/customerStore';
 import { useAuthStore } from '../store/authStore';
 import { calculateNextVisit, getDueDateLabel, getDueDateColor, safeFormat, safeDaysSince, parseEmailSummary, looksLikeEmail } from '../utils/scheduler';
 
-import { sendEmail, isGASConfigured } from '../api/sheets';
+import { sendEmail, isGASConfigured, updateCustomerEmail } from '../api/sheets';
 import { sendGmailMessage } from '../api/gmail';
 import { useGmailStore } from '../store/gmailStore';
 import { useSettingsStore } from '../store/settingsStore';
@@ -40,7 +40,7 @@ const FREQ_OPTIONS = [
 ];
 
 export default function CustomerModal({ customer, onClose }: CustomerModalProps) {
-  const { getActivitiesForCustomer, addActivity } = useCustomerStore();
+  const { getActivitiesForCustomer, addActivity, updateCustomer } = useCustomerStore();
   const { currentUser } = useAuthStore();
   const { isTokenValid, accessToken, signature: gmailSig } = useGmailStore();
   const { signatures, getDefault } = useSettingsStore();
@@ -67,6 +67,23 @@ export default function CustomerModal({ customer, onClose }: CustomerModalProps)
   const [emailSent, setEmailSent] = useState(false);
   const [emailError, setEmailError] = useState('');
   const hasGmailToken = isTokenValid();
+
+  // Editable email
+  const [editingEmail, setEditingEmail] = useState(false);
+  const [emailDraft, setEmailDraft] = useState(customer.email ?? '');
+  const [savingEmail, setSavingEmail] = useState(false);
+
+  const handleSaveEmail = async () => {
+    if (!emailDraft.trim()) return;
+    setSavingEmail(true);
+    updateCustomer(customer.id, { email: emailDraft.trim() });
+    if (isGASConfigured()) {
+      await updateCustomerEmail(customer.id, emailDraft.trim()).catch(() => {});
+    }
+    setSavingEmail(false);
+    setEditingEmail(false);
+    setEmailTo(emailDraft.trim());
+  };
 
   const nextVisit = calculateNextVisit(customer.lastContactDate, customer.visitFrequency, customer.dayOfWeek);
   const daysAgo = safeDaysSince(customer.lastContactDate);
@@ -184,11 +201,33 @@ export default function CustomerModal({ customer, onClose }: CustomerModalProps)
                     <span className="truncate">{customer.phone}</span>
                   </a>
                 )}
-                {customer.email && (
-                  <a href={`mailto:${customer.email}`} className="flex items-center gap-1 text-blue-200 text-xs hover:text-white">
+                {/* Editable email */}
+                {editingEmail ? (
+                  <div className="flex items-center gap-2 mt-1">
+                    <input
+                      value={emailDraft}
+                      onChange={e => setEmailDraft(e.target.value)}
+                      placeholder="email@example.com"
+                      className="bg-white/10 text-white text-xs rounded-lg px-2 py-1 outline-none border border-white/20 focus:border-amber-400 w-44"
+                      autoFocus
+                      onKeyDown={e => { if (e.key === 'Enter') handleSaveEmail(); if (e.key === 'Escape') setEditingEmail(false); }}
+                    />
+                    <button onClick={handleSaveEmail} disabled={savingEmail} className="text-[10px] font-bold bg-amber-500 text-white px-2 py-1 rounded-lg">
+                      {savingEmail ? '...' : 'Save'}
+                    </button>
+                    <button onClick={() => setEditingEmail(false)} className="text-[10px] text-blue-300 hover:text-white px-1">✕</button>
+                  </div>
+                ) : customer.email ? (
+                  <button onClick={() => setEditingEmail(true)} className="flex items-center gap-1 text-blue-200 text-xs hover:text-white group">
                     <Mail size={11} className="flex-shrink-0" />
                     <span className="truncate">{customer.email}</span>
-                  </a>
+                    <span className="text-[9px] text-white/30 group-hover:text-white/60 ml-1">edit</span>
+                  </button>
+                ) : (
+                  <button onClick={() => setEditingEmail(true)} className="flex items-center gap-1 text-blue-300/60 text-xs hover:text-white border border-dashed border-white/20 hover:border-white/40 rounded px-2 py-0.5 mt-1 transition-colors">
+                    <Mail size={11} />
+                    <span>Add email address</span>
+                  </button>
                 )}
               </div>
             </div>
@@ -233,7 +272,7 @@ export default function CustomerModal({ customer, onClose }: CustomerModalProps)
             </div>
           </div>
           {/* Action bar */}
-          {customer.email && (
+          {(customer.email || emailDraft) && (
             <div className="mt-4 pt-3 border-t border-white/10">
               <button
                 onClick={() => setShowCompose(!showCompose)}
@@ -254,8 +293,8 @@ export default function CustomerModal({ customer, onClose }: CustomerModalProps)
         <div className="flex-1 overflow-auto overflow-x-hidden">
           <div className="flex flex-col md:flex-row min-h-0 w-full">
 
-            {/* Left column */}
-            <div className="flex-1 min-w-0 p-4 md:p-5 space-y-5 md:border-r border-gray-100 overflow-hidden">
+            {/* Left column — capped so right column always shows */}
+            <div className="w-full md:max-w-[58%] min-w-0 p-4 md:p-5 space-y-5 md:border-r border-gray-100 overflow-hidden">
 
               {/* Field Visit Schedule — only for weekly/biweekly accounts */}
               {showVisitSchedule && <div>
@@ -572,8 +611,8 @@ export default function CustomerModal({ customer, onClose }: CustomerModalProps)
               )}
             </div>
 
-            {/* Right column — Recent Activity */}
-            <div className="w-full md:w-72 min-w-0 p-4 md:p-5 bg-gray-50 flex-shrink-0 overflow-hidden">
+            {/* Right column — always visible */}
+            <div className="w-full md:flex-1 min-w-0 p-4 md:p-5 bg-gray-50 overflow-hidden">
               <p className="text-xs font-black text-gray-800 uppercase tracking-wider mb-1">Recent Activity</p>
               <p className="text-[10px] text-gray-400 mb-4">Complete interaction timeline for this account.</p>
 

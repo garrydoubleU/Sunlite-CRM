@@ -53,6 +53,8 @@ interface CustomerState {
   triggerSync: () => void;
   syncEmails: () => Promise<void>;
   isSyncingEmails: boolean;
+  // Customer field updates
+  updateCustomer: (id: string, updates: Partial<Customer>) => void;
   // Activity CRUD — optimistic UI + background GAS write
   addActivity: (activity: Activity) => void;
   updateActivity: (id: string, updates: Partial<Activity>) => void;
@@ -90,6 +92,12 @@ export const useCustomerStore = create<CustomerState>((set, get) => ({
         syncError: err instanceof Error ? err.message : 'Sync failed',
       });
     }
+  },
+
+  updateCustomer: (id, updates) => {
+    set(state => ({
+      customers: state.customers.map(c => c.id === id ? { ...c, ...updates } : c),
+    }));
   },
 
   triggerSync: () => {

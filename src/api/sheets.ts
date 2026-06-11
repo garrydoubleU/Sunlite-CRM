@@ -312,6 +312,12 @@ export async function fetchQuickLinks(): Promise<GASQuickLink[]> {
   }));
 }
 
+// ── Customer update ───────────────────────────────────────────
+
+export async function updateCustomerEmail(customerId: string, email: string): Promise<void> {
+  await gasPost({ action: 'updateCustomerEmail', customerId, email });
+}
+
 // ── Email sync ────────────────────────────────────────────────
 
 export async function triggerEmailSync(): Promise<void> {
