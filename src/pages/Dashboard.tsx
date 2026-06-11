@@ -6,6 +6,7 @@ import { calculateNextVisit, getDaysUntil, getDueDateColor, safeDaysSince, safeF
 import RoutePlanner from '../components/RoutePlanner';
 import CustomerModal from '../components/CustomerModal';
 import CallerDashboard from './CallerDashboard';
+import AdminDashboard from './AdminDashboard';
 import type { Customer } from '../types';
 
 export default function Dashboard() {
@@ -20,10 +21,8 @@ export default function Dashboard() {
     );
     if (found) setSelectedCustomer(found);
   }
-  // Caller role (inside_sales) gets its own focused queue dashboard
-  if (role === 'inside_sales' || role === 'customer_service') {
-    return <CallerDashboard />;
-  }
+  if (role === 'admin') return <AdminDashboard />;
+  if (role === 'inside_sales' || role === 'customer_service') return <CallerDashboard />;
 
   // ── Shared stats ──────────────────────────────────────────────
   const untouchedCustomers = customers
