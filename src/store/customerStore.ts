@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import type { Customer, Activity } from '../types';
 import { CUSTOMERS, ACTIVITIES } from '../api/mockData';
 import {
-  fetchCustomers, fetchActivities, saveActivity as gasSave,
+  fetchCustomers, fetchAllCustomers, fetchActivities, saveActivity as gasSave,
   deleteActivity as gasDelete, isGASConfigured, triggerEmailSync,
   type GASCustomer, type GASActivity,
 } from '../api/sheets';
@@ -78,10 +78,9 @@ export const useCustomerStore = create<CustomerState>((set, get) => ({
     // Owners and admins see every account — pass no email so GAS returns all.
     // Reps get only their assigned book, filtered server-side by email.
     const seesAll = currentUser?.role === 'owner' || currentUser?.role === 'admin';
-    const userEmail = seesAll ? '' : (currentUser?.email ?? '');
     try {
       const [rawCustomers, rawActivities] = await Promise.all([
-        fetchCustomers(userEmail),
+        seesAll ? fetchAllCustomers() : fetchCustomers(currentUser?.email ?? ''),
         fetchActivities(),
       ]);
       set({

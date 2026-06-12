@@ -59,7 +59,7 @@ export default function CustomerModal({ customer, onClose }: CustomerModalProps)
 
   // Log form state
   const [notes, setNotes] = useState('');
-  const [logType, setLogType] = useState<ActivityType>('call');
+  const [logType, setLogType] = useState<ActivityType | ''>('');
   const [followUp, setFollowUp] = useState('');
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -153,7 +153,7 @@ export default function CustomerModal({ customer, onClose }: CustomerModalProps)
   const currentYear = new Date().getFullYear().toString();
 
   const handleSave = async () => {
-    if (!notes.trim()) return;
+    if (!notes.trim() || !logType) return;
     setSaving(true);
     addActivity({
       id: `a_${Date.now()}`,
@@ -169,6 +169,7 @@ export default function CustomerModal({ customer, onClose }: CustomerModalProps)
     setSaving(false);
     setSaved(true);
     setNotes('');
+    setLogType('');
     setFollowUp('');
     setTimeout(() => setSaved(false), 2000);
   };
@@ -446,7 +447,8 @@ export default function CustomerModal({ customer, onClose }: CustomerModalProps)
                 />
                 <div className="flex gap-2">
                   <div className="relative flex-1">
-                    <select value={logType} onChange={e => setLogType(e.target.value as ActivityType)} className="w-full bg-gray-50 border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs text-gray-700 outline-none appearance-none focus:border-amber-400">
+                    <select value={logType} onChange={e => setLogType(e.target.value as ActivityType | '')} className={`w-full bg-gray-50 border rounded-lg px-2.5 py-1.5 text-xs outline-none appearance-none focus:border-amber-400 ${logType ? 'border-gray-200 text-gray-700' : 'border-amber-300 text-gray-400'}`}>
+                      <option value="" disabled>Select type…</option>
                       <option value="call">Phone Call</option>
                       <option value="visit">Field Visit</option>
                       <option value="email">Email</option>
@@ -458,15 +460,15 @@ export default function CustomerModal({ customer, onClose }: CustomerModalProps)
                 </div>
                 <button
                   onClick={handleSave}
-                  disabled={!notes.trim() || saving}
+                  disabled={!notes.trim() || !logType || saving}
                   className={`w-full py-2 rounded-lg font-bold text-xs transition-all ${
                     saved ? 'bg-green-500 text-white' :
                     saving ? 'bg-gray-200 text-gray-400' :
-                    notes.trim() ? 'bg-[#0F2A4A] hover:bg-[#1a3a5c] text-white' :
+                    notes.trim() && logType ? 'bg-[#0F2A4A] hover:bg-[#1a3a5c] text-white' :
                     'bg-gray-100 text-gray-400'
                   }`}
                 >
-                  {saved ? '✓ Saved' : saving ? 'Saving…' : 'Save Activity'}
+                  {saved ? '✓ Saved' : saving ? 'Saving…' : !logType && notes.trim() ? 'Pick a type to save' : 'Save Activity'}
                 </button>
               </div>
 

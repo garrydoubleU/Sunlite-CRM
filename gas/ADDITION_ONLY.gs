@@ -4,6 +4,27 @@
 //   return createJsonResponse({ error: "Action '" + action + "' not handled." });
 // ─────────────────────────────────────────────────────────────────
 
+    // --- SUNLITE CRM: GET ALL CUSTOMERS (owner / admin — no rep filter) ---
+    if (action === "getAllCustomers") {
+      const custSheet = ss.getSheetByName("Customers") || ss.getSheets()[0];
+      if (!custSheet) return createJsonResponse([]);
+      const values = custSheet.getDataRange().getValues();
+      if (values.length < 2) return createJsonResponse([]);
+      const headers = values[0].map(h => h.toString().replace(/\s+/g, ''));
+      const out = [];
+      for (let i = 1; i < values.length; i++) {
+        const row = values[i];
+        if (!row.some(c => c !== "")) continue;
+        const obj = {};
+        headers.forEach((h, j) => {
+          const v = row[j];
+          obj[h] = v instanceof Date ? v.toISOString() : v;
+        });
+        out.push(obj);
+      }
+      return createJsonResponse(out);
+    }
+
     // --- SUNLITE CRM: DELETE LOG ---
     if (action === "deleteLog") {
       const logSheet = ss.getSheetByName("Log") || ss.getSheetByName("Logs");

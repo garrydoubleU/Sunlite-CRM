@@ -180,6 +180,14 @@ export async function fetchCustomers(userEmail?: string): Promise<GASCustomer[]>
   return (Array.isArray(raw) ? raw : []).map(mapRawCustomer);
 }
 
+// Owner / admin: pull every account regardless of rep assignment.
+// Falls back to the unfiltered getCustomers if the action isn't deployed yet.
+export async function fetchAllCustomers(): Promise<GASCustomer[]> {
+  const raw = await gasGet<Record<string, unknown>[] | { error: string }>('getAllCustomers');
+  if (Array.isArray(raw) && raw.length > 0) return raw.map(mapRawCustomer);
+  return fetchCustomers(); // fallback: getCustomers with no email
+}
+
 // ── Activities / Logs ─────────────────────────────────────────
 
 export interface GASActivity {
