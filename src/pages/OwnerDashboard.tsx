@@ -1,15 +1,21 @@
 import { useState, useMemo } from 'react';
 import { ChevronDown, ChevronUp } from 'lucide-react';
 import { useCustomerStore } from '../store/customerStore';
+import { useAuthStore } from '../store/authStore';
 import { safeFormat } from '../utils/scheduler';
-import { startOfWeek, isToday, isThisWeek } from 'date-fns';
+import { startOfWeek, isToday, isThisWeek, format } from 'date-fns';
 
 type Period = 'today' | 'week';
 
 export default function OwnerDashboard() {
   const { activities, customers } = useCustomerStore();
+  const { currentUser } = useAuthStore();
   const [period, setPeriod] = useState<Period>('today');
   const [expandedRep, setExpandedRep] = useState<string | null>(null);
+
+  const firstName = currentUser?.name?.split(' ')[0] ?? 'there';
+  const hour = new Date().getHours();
+  const greeting = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
 
   const weekStart = startOfWeek(new Date(), { weekStartsOn: 1 });
 
@@ -47,6 +53,14 @@ export default function OwnerDashboard() {
 
   return (
     <div className="max-w-xl mx-auto space-y-6 py-2">
+
+      {/* Greeting header */}
+      <div>
+        <h1 className="text-2xl font-black text-gray-900">{greeting}, {firstName} 👋</h1>
+        <p className="text-sm text-gray-500 mt-0.5">
+          Here's what your team is doing — {format(new Date(), 'EEEE, MMMM d')}
+        </p>
+      </div>
 
       {/* Period toggle */}
       <div className="flex bg-gray-100 rounded-xl p-1 gap-1">

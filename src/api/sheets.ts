@@ -193,31 +193,47 @@ export interface GASActivity {
   followUpDate?: string;
 }
 
-// Their log rows come back with whitespace-stripped header keys:
-// Timestamp, UserEmail (or userEmail), CustomerName, Notes, Reason,
-// NewEmail, FollowUpDate, LogType, Priority
-function mapRawLog(r: Record<string, unknown>, idx: number): GASActivity {
-  const logType = String(r.LogType ?? r.logType ?? r.Type ?? 'note').toLowerCase();
-  const typeMap: Record<string, GASActivity['type']> = {
-    'phone call': 'call', call: 'call', phone: 'call',
-    visit: 'visit', 'in-person': 'visit', field: 'visit',
-    email: 'email', note: 'note', other: 'note',
+// Log rows can come back from different GAS schemas (the clean Code.gs schema
+// uses type/date/repName/summary; the legacy Sunshine schema uses
+// LogType/Timestamp/UserEmail/Notes). Normalise every header to a lowercase,
+// space-stripped key so we catch all variants regardless of casing.
+function mapRawLog(raw: Record<string, unknown>, idx: number): GASActivity {
+  const r: Record<string, unknown> = {};
+  Object.entries(raw).forEach(([k, v]) => {
+    r[String(k).toLowerCase().replace(/\s+/g, '')] = v;
+  });
+  const pick = (...keys: string[]): string => {
+    for (const k of keys) {
+      const v = r[k];
+      if (v !== undefined && v !== null && String(v) !== '') return String(v);
+    }
+    return '';
   };
 
-  const customerName = String(r.CustomerName ?? r.Customer ?? r.customername ?? '');
-  const customerID = String(r.CustomerID ?? r.ID ?? r.customerId ?? '');
+  const typeMap: Record<string, GASActivity['type']> = {
+    'phone call': 'call', phonecall: 'call', call: 'call', phone: 'call',
+    visit: 'visit', 'field visit': 'visit', fieldvisit: 'visit', 'in-person': 'visit', field: 'visit',
+    email: 'email', note: 'note', other: 'note',
+  };
+  const logTypeStr = pick('logtype', 'type', 'activitytype').toLowerCase().trim();
 
-  const followUpRaw = r.FollowUpDate ?? r.followUpDate ?? r.FollowUp ?? '';
+  const customerName = pick('customername', 'customer');
+  const customerID = pick('customerid', 'custid');
+
+  const followUpRaw = pick('followupdate', 'followup');
   const followUpDate = followUpRaw ? safeDate(followUpRaw, '') : undefined;
 
+  const sourceStr = pick('source').toLowerCase();
+
   return {
-    id: String(r.ID ?? r.id ?? `log_${idx}`),
+    id: pick('id', 'logid') || `log_${idx}`,
     customerId: customerID || customerName,
-    type: typeMap[logType] ?? 'note',
-    date: safeDate(r.Timestamp),
-    repName: String(r.UserEmail ?? r.userEmail ?? r.RepName ?? ''),
-    summary: String(r.Notes ?? r.notes ?? r.Summary ?? ''),
-    source: 'manual',
+    type: typeMap[logTypeStr] ?? 'note',
+    date: safeDate(pick('timestamp', 'date')),
+    // Prefer a human name; fall back to the logging email
+    repName: pick('repname', 'username', 'user', 'useremail', 'email'),
+    summary: pick('notes', 'summary', 'note'),
+    source: sourceStr === 'gmail-auto' ? 'gmail-auto' : 'manual',
     ...(followUpDate ? { followUpDate } : {}),
   };
 }
@@ -227,25 +243,42 @@ export async function fetchActivities(): Promise<GASActivity[]> {
   return (Array.isArray(raw) ? raw : []).map(mapRawLog);
 }
 
-// Save a log using their existing saveLog parameter names
+// Save a log. We send both the clean Code.gs column names (type, date,
+// repName, summary, source) and the legacy Sunshine names (LogType, Notes,
+// CustomerName, UserEmail) so the row is written correctly no matter which
+// GAS schema is deployed. Extra params are simply ignored by the script.
 export async function saveActivity(
   activity: GASActivity,
   customerName: string,
   userEmail: string
 ): Promise<void> {
-  const logTypeMap: Record<string, string> = {
+  const logTypeLabel: Record<string, string> = {
     call: 'Phone Call', visit: 'Visit', email: 'Email', note: 'Note',
   };
+  const label = logTypeLabel[activity.type] ?? 'Note';
   await gasPost({
     action: 'saveLog',
+    // clean schema
+    id: activity.id,
+    customerId: activity.customerId,
+    type: activity.type,           // 'call' | 'visit' | 'email' | 'note'
+    date: activity.date,
+    repName: activity.repName,
+    summary: activity.summary,
+    source: activity.source ?? 'manual',
+    followUpDate: activity.followUpDate ?? '',
+    // legacy Sunshine schema
     userEmail,
+    UserEmail: userEmail,
     CustomerName: customerName,
     CustomerID: activity.customerId,
     Notes: activity.summary,
-    LogType: logTypeMap[activity.type] ?? 'Note',
+    LogType: label,
+    Type: label,
+    RepName: activity.repName,
+    FollowUpDate: activity.followUpDate ?? '',
     Reason: '',
     NewEmail: '',
-    FollowUpDate: activity.followUpDate ?? '',
     Priority: '',
   });
 }

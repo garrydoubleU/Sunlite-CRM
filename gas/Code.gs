@@ -27,6 +27,12 @@ function doGet(e) {
       case 'getUsers':    return buildResponse(getSheetData('Users'));
       case 'getQuickLinks': return buildResponse(getSheetData('QuickLinks'));
       case 'ping':        return buildResponse({ status: 'ok' });
+      // Writes also routed through GET because the frontend sends them as
+      // query params (avoids a CORS preflight on the Apps Script endpoint).
+      case 'saveLog':       return buildResponse(saveLog(e.parameter));
+      case 'updateCustomer':return buildResponse(updateCustomer(e.parameter));
+      case 'updateCustomerEmail': return buildResponse(updateCustomer(e.parameter));
+      case 'deleteLog':     return buildResponse(deleteLog(e.parameter));
       default:            return buildResponse({ error: 'Unknown action: ' + action });
     }
   } catch (err) {
@@ -123,18 +129,42 @@ function saveLog(body) {
 
   const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
 
-  // Generate ID if not provided
   const id = body.id || 'a_' + Date.now();
   const now = new Date().toISOString();
 
-  const row = headers.map(h => {
-    if (h === 'id') return id;
-    if (h === 'date' && !body.date) return now;
-    return body[h] !== undefined ? body[h] : '';
-  });
+  // Normalise the activity type from any param the frontend might send.
+  // LogType comes through as 'Phone Call'/'Visit'/'Email'/'Note'.
+  var rawType = String(body.type || body.LogType || body.Type || 'note').toLowerCase();
+  var typeMap = {
+    'phone call': 'call', 'phonecall': 'call', 'call': 'call', 'phone': 'call',
+    'visit': 'visit', 'field visit': 'visit', 'email': 'email', 'note': 'note',
+  };
+  var cleanType = typeMap[rawType] || 'note';
 
+  // Build a lookup that tolerates either schema's column names.
+  function val(h) {
+    var key = String(h).toLowerCase().replace(/\s+/g, '');
+    switch (key) {
+      case 'id':           return id;
+      case 'customerid':   return body.customerId || body.CustomerID || '';
+      case 'customername': return body.CustomerName || body.customerName || '';
+      case 'type':
+      case 'logtype':      return cleanType;
+      case 'date':
+      case 'timestamp':    return body.date || now;
+      case 'repname':      return body.repName || body.RepName || body.userEmail || '';
+      case 'useremail':    return body.userEmail || body.UserEmail || '';
+      case 'summary':
+      case 'notes':        return body.summary || body.Notes || '';
+      case 'source':       return body.source || 'manual';
+      case 'followupdate': return body.followUpDate || body.FollowUpDate || '';
+      default:             return body[h] !== undefined ? body[h] : '';
+    }
+  }
+
+  var row = headers.map(val);
   sheet.appendRow(row);
-  return { success: true, id };
+  return { success: true, id: id, type: cleanType };
 }
 
 // ── Update customer field ─────────────────────────────────────
@@ -190,7 +220,7 @@ function setupSheets() {
     Customers: ['id','name','assignedRepId','assignedRepName','territory','billingAddress',
                 'phone','email','priorityTier','customerClass','visitFrequency',
                 'lastContactDate','activeStatus','openOrderCount','revenue','dayOfWeek'],
-    Activities: ['id','customerId','type','date','repName','summary','source'],
+    Activities: ['id','customerId','type','date','repName','summary','source','followUpDate'],
     QuickLinks: ['id','label','icon','description','color','url'],
   };
 
