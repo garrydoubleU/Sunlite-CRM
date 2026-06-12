@@ -90,7 +90,9 @@ export default function ActivityFeed() {
             </div>
             <div className="space-y-3">
               {grouped.groups[group].map(act => {
-                const customer = customers.find(c => c.id === act.customerId);
+                const customer = customers.find(c =>
+                  c.id === act.customerId || c.name.toLowerCase() === act.customerId.toLowerCase()
+                );
                 const { icon: Icon, color, label } = TYPE_CONFIG[act.type];
                 return (
                   <div key={act.id} className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 flex gap-4 hover:border-amber-200 transition-colors">
@@ -106,9 +108,15 @@ export default function ActivityFeed() {
                         )}
                       </div>
                       <p className="text-sm text-gray-600 leading-relaxed">{act.summary}</p>
-                      <div className="flex items-center gap-3 mt-2">
-                        <span className="text-xs text-gray-400">{act.repName}</span>
-                        <span className="text-gray-200">·</span>
+                      <div className="flex items-center gap-2 mt-2 flex-wrap">
+                        {act.repName && (
+                          <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold bg-amber-50 text-amber-700 border border-amber-100 pl-1 pr-2.5 py-0.5 rounded-full">
+                            <span className="w-4 h-4 rounded-full bg-amber-500 flex items-center justify-center text-white text-[8px] font-bold">
+                              {act.repName.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
+                            </span>
+                            {act.repName}
+                          </span>
+                        )}
                         <span className="text-xs text-gray-400">{format(parseISO(act.date), 'MMM d, yyyy')}</span>
                         {customer && (
                           <>

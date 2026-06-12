@@ -26,6 +26,12 @@ export default function Layout({ children, currentPage, onNavigate }: LayoutProp
   const [showNotifications, setShowNotifications] = useState(false);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
 
+  const hubLabel =
+    currentUser?.role === 'owner' ? 'Owner Console' :
+    currentUser?.role === 'admin' ? 'Admin Console' :
+    currentUser?.role === 'inside_sales' || currentUser?.role === 'customer_service' ? 'Call Center' :
+    'Field Sales Hub';
+
   return (
     <div className="flex h-screen bg-gray-100 overflow-hidden">
 
@@ -37,7 +43,7 @@ export default function Layout({ children, currentPage, onNavigate }: LayoutProp
               <span className="text-amber-500 font-bold text-lg tracking-tight">sunlite</span>
             </div>
             <h1 className="text-2xl font-black text-slate-900 tracking-tight">Sunlite</h1>
-            <p className="text-xs font-semibold text-amber-500 tracking-[0.2em] uppercase mt-0.5">Field Sales Hub</p>
+            <p className="text-xs font-semibold text-amber-500 tracking-[0.2em] uppercase mt-0.5">{hubLabel}</p>
           </div>
         </div>
         <div className="px-4 mb-2">
@@ -78,7 +84,7 @@ export default function Layout({ children, currentPage, onNavigate }: LayoutProp
                 </div>
                 <div>
                   <p className="font-black text-gray-900 text-sm">Sunlite</p>
-                  <p className="text-[10px] text-amber-500 font-bold uppercase tracking-wider">Field Sales Hub</p>
+                  <p className="text-[10px] text-amber-500 font-bold uppercase tracking-wider">{hubLabel}</p>
                 </div>
               </div>
               <button onClick={() => setShowMobileMenu(false)} className="text-gray-400 p-1">

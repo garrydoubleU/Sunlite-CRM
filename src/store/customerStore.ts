@@ -74,7 +74,11 @@ export const useCustomerStore = create<CustomerState>((set, get) => ({
   loadFromGAS: async () => {
     if (!isGASConfigured()) return; // stay on mock data
     set({ isSyncing: true, syncError: null });
-    const userEmail = useAuthStore.getState().currentUser?.email ?? '';
+    const currentUser = useAuthStore.getState().currentUser;
+    // Owners and admins see every account — pass no email so GAS returns all.
+    // Reps get only their assigned book, filtered server-side by email.
+    const seesAll = currentUser?.role === 'owner' || currentUser?.role === 'admin';
+    const userEmail = seesAll ? '' : (currentUser?.email ?? '');
     try {
       const [rawCustomers, rawActivities] = await Promise.all([
         fetchCustomers(userEmail),
