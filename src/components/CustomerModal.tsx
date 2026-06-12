@@ -2,11 +2,10 @@ import { useState, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Phone, Mail, Clock, Plus, ChevronDown, FileText, PhoneCall, Navigation, Send, ArrowUpRight, ArrowDownLeft } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
-import type { Customer } from '../types';
+import type { Customer, Contact, ActivityType } from '../types';
 import { useCustomerStore } from '../store/customerStore';
 import { useAuthStore } from '../store/authStore';
 import { calculateNextVisit, getDueDateLabel, getDueDateColor, safeFormat, safeDaysSince, parseEmailSummary, looksLikeEmail } from '../utils/scheduler';
-import type { ActivityType } from '../types';
 
 import { sendEmail, isGASConfigured, updateCustomerEmail } from '../api/sheets';
 import { sendGmailMessage } from '../api/gmail';
@@ -19,9 +18,18 @@ interface CustomerModalProps {
   onClose: () => void;
 }
 
-// Parse comma-separated emails into an array
-function parseContacts(emailField: string): string[] {
-  return emailField.split(',').map(e => e.trim()).filter(Boolean);
+function parseContacts(emailField: string): Contact[] {
+  if (!emailField) return [];
+  try {
+    const p = JSON.parse(emailField);
+    if (Array.isArray(p)) return p.map(c => typeof c === 'string' ? { email: c } : c as Contact);
+  } catch {}
+  return emailField.split(',').map(e => e.trim()).filter(Boolean).map(email => ({ email }));
+}
+
+function contactLabel(c: Contact): string {
+  const name = [c.firstName, c.lastName].filter(Boolean).join(' ');
+  return name ? `${name}${c.position ? ` · ${c.position}` : ''}` : c.email;
 }
 
 const TIER_COLORS: Record<number, { bg: string; text: string; label: string }> = {
@@ -56,9 +64,48 @@ export default function CustomerModal({ customer, onClose }: CustomerModalProps)
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
 
+  // Multi-contact state
+  const [contacts, setContacts] = useState<Contact[]>(parseContacts(customer.email ?? ''));
+  const [addingContact, setAddingContact] = useState(false);
+  const [savingContact, setSavingContact] = useState(false);
+  const [newContact, setNewContact] = useState<Contact>({ email: '', firstName: '', lastName: '', position: '' });
+
+  const persistContacts = async (list: Contact[]) => {
+    const serialized = JSON.stringify(list);
+    updateCustomer(customer.id, { email: serialized });
+    if (isGASConfigured()) {
+      await updateCustomerEmail(customer.id, serialized).catch(() => {});
+    }
+  };
+
+  const handleAddContact = async () => {
+    if (!newContact.email.trim()) return;
+    setSavingContact(true);
+    const entry: Contact = {
+      email: newContact.email.trim(),
+      ...(newContact.firstName?.trim() ? { firstName: newContact.firstName.trim() } : {}),
+      ...(newContact.lastName?.trim() ? { lastName: newContact.lastName.trim() } : {}),
+      ...(newContact.position?.trim() ? { position: newContact.position.trim() } : {}),
+    };
+    const next = [...contacts.filter(c => c.email !== entry.email), entry];
+    setContacts(next);
+    await persistContacts(next);
+    setSavingContact(false);
+    setNewContact({ email: '', firstName: '', lastName: '', position: '' });
+    setAddingContact(false);
+    if (!emailTo) setEmailTo(entry.email);
+  };
+
+  const handleRemoveContact = async (email: string) => {
+    const next = contacts.filter(c => c.email !== email);
+    setContacts(next);
+    await persistContacts(next);
+    if (emailTo === email) setEmailTo(next[0]?.email ?? '');
+  };
+
   // Email compose state
   const [showCompose, setShowCompose] = useState(false);
-  const [emailTo, setEmailTo] = useState(customer.email ?? '');
+  const [emailTo, setEmailTo] = useState(parseContacts(customer.email ?? '')[0]?.email ?? '');
   const [emailSubject, setEmailSubject] = useState('');
   const [selectedSigId, setSelectedSigId] = useState<string | null>(defaultSig?.id ?? null);
   const activeSig = signatures.find(s => s.id === selectedSigId)?.body ?? signature ?? null;
@@ -67,40 +114,6 @@ export default function CustomerModal({ customer, onClose }: CustomerModalProps)
   const [emailSent, setEmailSent] = useState(false);
   const [emailError, setEmailError] = useState('');
   const hasGmailToken = isTokenValid();
-
-  // Multi-contact email state
-  const [contacts, setContacts] = useState<string[]>(parseContacts(customer.email ?? ''));
-  const [addingContact, setAddingContact] = useState(false);
-  const [contactDraft, setContactDraft] = useState('');
-  const [savingContact, setSavingContact] = useState(false);
-
-  const persistContacts = async (newContacts: string[]) => {
-    const joined = newContacts.join(', ');
-    updateCustomer(customer.id, { email: joined });
-    if (isGASConfigured()) {
-      await updateCustomerEmail(customer.id, joined).catch(() => {});
-    }
-  };
-
-  const handleAddContact = async () => {
-    const trimmed = contactDraft.trim();
-    if (!trimmed) return;
-    setSavingContact(true);
-    const next = [...contacts.filter(c => c !== trimmed), trimmed];
-    setContacts(next);
-    await persistContacts(next);
-    setSavingContact(false);
-    setContactDraft('');
-    setAddingContact(false);
-    if (!emailTo) setEmailTo(trimmed);
-  };
-
-  const handleRemoveContact = async (addr: string) => {
-    const next = contacts.filter(c => c !== addr);
-    setContacts(next);
-    await persistContacts(next);
-    if (emailTo === addr) setEmailTo(next[0] ?? '');
-  };
 
   const daysAgo = safeDaysSince(customer.lastContactDate);
   const tier = TIER_COLORS[customer.priorityTier];
@@ -242,31 +255,38 @@ export default function CustomerModal({ customer, onClose }: CustomerModalProps)
                     {customer.phone}
                   </a>
                 )}
-                {contacts.map(addr => (
-                  <div key={addr} className="flex items-center gap-1 group">
-                    <button onClick={() => { setEmailTo(addr); setTab('activity'); setShowCompose(true); }} className="flex items-center gap-1 text-blue-200 text-xs hover:text-amber-300 transition-colors">
+                {contacts.map(c => (
+                  <div key={c.email} className="flex items-center gap-1 group">
+                    <button onClick={() => { setEmailTo(c.email); setTab('activity'); setShowCompose(true); }} className="flex items-center gap-1 text-blue-200 text-xs hover:text-amber-300 transition-colors">
                       <Mail size={10} />
-                      <span className="max-w-[160px] truncate">{addr}</span>
+                      <span className="max-w-[200px] truncate">{contactLabel(c)}</span>
                     </button>
-                    <button onClick={() => handleRemoveContact(addr)} className="text-blue-400/30 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-all">
+                    <button onClick={() => handleRemoveContact(c.email)} className="text-blue-400/30 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-all">
                       <X size={9} />
                     </button>
                   </div>
                 ))}
                 {addingContact ? (
-                  <div className="flex items-center gap-1">
+                  <div className="mt-1 bg-white/5 rounded-lg p-2 border border-white/10 space-y-1.5">
+                    <div className="grid grid-cols-2 gap-1">
+                      <input value={newContact.firstName ?? ''} onChange={e => setNewContact(p => ({...p, firstName: e.target.value}))} placeholder="First name" className="bg-white/10 text-white text-xs rounded-md px-2 py-1 outline-none border border-white/20 focus:border-amber-400 placeholder-blue-300/50" />
+                      <input value={newContact.lastName ?? ''} onChange={e => setNewContact(p => ({...p, lastName: e.target.value}))} placeholder="Last name" className="bg-white/10 text-white text-xs rounded-md px-2 py-1 outline-none border border-white/20 focus:border-amber-400 placeholder-blue-300/50" />
+                    </div>
+                    <input value={newContact.position ?? ''} onChange={e => setNewContact(p => ({...p, position: e.target.value}))} placeholder="Position (e.g. Buyer, Owner)" className="w-full bg-white/10 text-white text-xs rounded-md px-2 py-1 outline-none border border-white/20 focus:border-amber-400 placeholder-blue-300/50" />
                     <input
-                      value={contactDraft}
-                      onChange={e => setContactDraft(e.target.value)}
-                      placeholder="email@example.com"
-                      className="bg-white/10 text-white text-xs rounded-md px-2 py-0.5 outline-none border border-white/20 focus:border-amber-400 w-36"
+                      value={newContact.email}
+                      onChange={e => setNewContact(p => ({...p, email: e.target.value}))}
+                      placeholder="Email address *"
                       autoFocus
+                      className="w-full bg-white/10 text-white text-xs rounded-md px-2 py-1 outline-none border border-white/20 focus:border-amber-400 placeholder-blue-300/50"
                       onKeyDown={e => { if (e.key === 'Enter') handleAddContact(); if (e.key === 'Escape') setAddingContact(false); }}
                     />
-                    <button onClick={handleAddContact} disabled={savingContact} className="text-[10px] font-bold bg-amber-500 text-white px-2 py-0.5 rounded-md">
-                      {savingContact ? '…' : 'Add'}
-                    </button>
-                    <button onClick={() => setAddingContact(false)} className="text-blue-300 hover:text-white"><X size={11} /></button>
+                    <div className="flex gap-1">
+                      <button onClick={handleAddContact} disabled={savingContact || !newContact.email.trim()} className="flex-1 text-[10px] font-bold bg-amber-500 disabled:bg-gray-600 text-white px-2 py-1 rounded-md transition-colors">
+                        {savingContact ? 'Saving…' : 'Save Contact'}
+                      </button>
+                      <button onClick={() => setAddingContact(false)} className="text-blue-300 hover:text-white px-2"><X size={11} /></button>
+                    </div>
                   </div>
                 ) : (
                   <button onClick={() => setAddingContact(true)} className="flex items-center gap-0.5 text-[10px] text-amber-400 hover:text-amber-300 transition-colors">
@@ -386,7 +406,7 @@ export default function CustomerModal({ customer, onClose }: CustomerModalProps)
                       {contacts.length > 1 ? (
                         <>
                           <select value={emailTo} onChange={e => setEmailTo(e.target.value)} className="w-full bg-gray-50 border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs text-gray-700 outline-none appearance-none focus:border-amber-400">
-                            {contacts.map(c => <option key={c} value={c}>{c}</option>)}
+                            {contacts.map(c => <option key={c.email} value={c.email}>{contactLabel(c)} — {c.email}</option>)}
                           </select>
                           <ChevronDown size={11} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
                         </>

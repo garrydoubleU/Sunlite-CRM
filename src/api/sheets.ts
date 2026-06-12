@@ -37,7 +37,7 @@ export interface GASUser {
   id: string;
   name: string;
   email: string;
-  role: 'admin' | 'field_sales' | 'inside_sales' | 'customer_service';
+  role: 'admin' | 'field_sales' | 'inside_sales' | 'customer_service' | 'owner';
   territory: string;
   avatarInitials: string;
 }
@@ -49,6 +49,7 @@ function normalizeRole(role: string): GASUser['role'] {
   if (r.includes('field')) return 'field_sales';
   if (r.includes('inside')) return 'inside_sales';
   if (r.includes('service') || r.includes('cs') || r.includes('support')) return 'customer_service';
+  if (r.includes('owner')) return 'owner';
   return 'field_sales'; // default
 }
 

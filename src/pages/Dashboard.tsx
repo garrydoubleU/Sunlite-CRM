@@ -7,6 +7,7 @@ import RoutePlanner from '../components/RoutePlanner';
 import CustomerModal from '../components/CustomerModal';
 import CallerDashboard from './CallerDashboard';
 import AdminDashboard from './AdminDashboard';
+import OwnerDashboard from './OwnerDashboard';
 import type { Customer } from '../types';
 
 export default function Dashboard() {
@@ -21,6 +22,7 @@ export default function Dashboard() {
     );
     if (found) setSelectedCustomer(found);
   }
+  if (role === 'owner') return <OwnerDashboard />;
   if (role === 'admin') return <AdminDashboard />;
   if (role === 'inside_sales' || role === 'customer_service') return <CallerDashboard />;
 

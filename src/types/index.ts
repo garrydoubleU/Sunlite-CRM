@@ -1,4 +1,11 @@
-export type Role = 'admin' | 'field_sales' | 'inside_sales' | 'customer_service';
+export type Role = 'admin' | 'field_sales' | 'inside_sales' | 'customer_service' | 'owner';
+
+export interface Contact {
+  email: string;
+  firstName?: string;
+  lastName?: string;
+  position?: string;
+}
 export type VisitFrequency = 'weekly' | 'biweekly' | 'monthly';
 export type ActivityType = 'note' | 'call' | 'visit' | 'email';
 export type PriorityTier = 1 | 2 | 3 | 4;
