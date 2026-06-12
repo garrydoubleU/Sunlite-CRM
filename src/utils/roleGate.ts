@@ -5,8 +5,8 @@ export function stripRevenueFromContext(customers: Customer[], role: Role): Omit
   return customers.map(({ revenue: _revenue, ...rest }) => rest);
 }
 
-export function canViewRevenue(role: Role): boolean {
-  return role === 'admin';
+export function canViewRevenue(_role: Role): boolean {
+  return true; // all roles see revenue on cards
 }
 
 export function canManageTerritory(role: Role): boolean {

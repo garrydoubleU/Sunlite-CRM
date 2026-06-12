@@ -67,10 +67,14 @@ export default function CustomerCard({ customer, onOpenModal }: CustomerCardProp
 
         {/* Badges */}
         <div className="flex items-center gap-2 flex-wrap mb-3">
-          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase ${FREQ_COLORS[customer.visitFrequency]}`}>
-            {customer.visitFrequency}
-          </span>
-          <span className="text-[10px] text-gray-400 bg-gray-50 px-2 py-0.5 rounded-full">{customer.customerClass}</span>
+          {customer.visitFrequency && (
+            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase ${FREQ_COLORS[customer.visitFrequency] ?? 'bg-gray-100 text-gray-500'}`}>
+              {customer.visitFrequency}
+            </span>
+          )}
+          {customer.customerClass && (
+            <span className="text-[10px] text-gray-400 bg-gray-50 px-2 py-0.5 rounded-full">{customer.customerClass}</span>
+          )}
         </div>
 
         {/* Stats row */}

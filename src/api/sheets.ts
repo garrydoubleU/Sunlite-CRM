@@ -90,7 +90,7 @@ export interface GASCustomer {
   email: string;
   priorityTier: number;
   customerClass: string;
-  visitFrequency: 'weekly' | 'biweekly' | 'monthly';
+  visitFrequency: 'weekly' | 'biweekly' | 'monthly' | '';
   lastContactDate: string;
   activeStatus: boolean;
   openOrderCount: number;
@@ -100,7 +100,9 @@ export interface GASCustomer {
 }
 
 // Safe date parser — never throws, returns fallback ISO string
-function safeDate(val: unknown, fallback = new Date().toISOString()): string {
+// Default fallback is 1 year ago so missing dates show as overdue, not "just contacted"
+const ONE_YEAR_AGO = new Date(Date.now() - 365 * 86400000).toISOString();
+function safeDate(val: unknown, fallback = ONE_YEAR_AGO): string {
   if (!val || val === '' || val === 'null' || val === 'undefined') return fallback;
   const d = new Date(String(val));
   return isNaN(d.getTime()) ? fallback : d.toISOString();
@@ -118,7 +120,7 @@ function mapRawCustomer(r: Record<string, unknown>): GASCustomer {
   const freqMap: Record<string, GASCustomer['visitFrequency']> = {
     weekly: 'weekly', 'bi-weekly': 'biweekly', biweekly: 'biweekly', monthly: 'monthly',
   };
-  const freq = freqMap[freqRaw] ?? 'monthly';
+  const freq = freqMap[freqRaw] ?? '';
 
   // Collect quarterly revenue columns — handles Q1_2023, Q1 2023, 2023Q1, Q1-2023
   let revenue = 0;

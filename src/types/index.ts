@@ -6,7 +6,7 @@ export interface Contact {
   lastName?: string;
   position?: string;
 }
-export type VisitFrequency = 'weekly' | 'biweekly' | 'monthly';
+export type VisitFrequency = 'weekly' | 'biweekly' | 'monthly' | '';
 export type ActivityType = 'note' | 'call' | 'visit' | 'email';
 export type PriorityTier = 1 | 2 | 3 | 4;
 
