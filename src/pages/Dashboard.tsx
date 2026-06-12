@@ -5,6 +5,7 @@ import { useAuthStore } from '../store/authStore';
 import { calculateNextVisit, getDaysUntil, getDueDateColor, safeDaysSince, safeFormat } from '../utils/scheduler';
 import RoutePlanner from '../components/RoutePlanner';
 import CustomerModal from '../components/CustomerModal';
+import AssignmentAlert from '../components/AssignmentAlert';
 import CallerDashboard from './CallerDashboard';
 import AdminDashboard from './AdminDashboard';
 import OwnerDashboard from './OwnerDashboard';
@@ -62,6 +63,7 @@ export default function Dashboard() {
   // ── Render: Field Sales / Admin ───────────────────────────────
   return (
     <div className="space-y-6">
+      <AssignmentAlert />
       {/* Stat cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">

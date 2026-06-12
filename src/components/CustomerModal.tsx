@@ -1,13 +1,13 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Phone, Mail, Clock, Plus, ChevronDown, FileText, PhoneCall, Navigation, Send, ArrowUpRight, ArrowDownLeft } from 'lucide-react';
+import { X, Phone, Mail, Clock, Plus, ChevronDown, FileText, PhoneCall, Navigation, Send, ArrowUpRight, ArrowDownLeft, Lock, UserPlus } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
-import type { Customer, Contact, ActivityType } from '../types';
-import { useCustomerStore } from '../store/customerStore';
+import type { Customer, Contact, ActivityType, SalesRep } from '../types';
+import { useCustomerStore, ownsAccount } from '../store/customerStore';
 import { useAuthStore } from '../store/authStore';
 import { calculateNextVisit, getDueDateLabel, getDueDateColor, safeFormat, safeDaysSince, parseEmailSummary, looksLikeEmail } from '../utils/scheduler';
 
-import { sendEmail, isGASConfigured, updateCustomerEmail } from '../api/sheets';
+import { sendEmail, isGASConfigured, updateCustomerEmail, fetchUsers } from '../api/sheets';
 import { sendGmailMessage } from '../api/gmail';
 import { useGmailStore } from '../store/gmailStore';
 import { useSettingsStore } from '../store/settingsStore';
@@ -48,8 +48,50 @@ const FREQ_OPTIONS = [
 ];
 
 export default function CustomerModal({ customer, onClose }: CustomerModalProps) {
-  const { getActivitiesForCustomer, addActivity, updateCustomer } = useCustomerStore();
+  const { getActivitiesForCustomer, addActivity, updateCustomer, assignAccount, requestAccess } = useCustomerStore();
   const { currentUser } = useAuthStore();
+
+  const myEmail = currentUser?.email ?? '';
+  const role = currentUser?.role ?? 'field_sales';
+  // Field reps get a read-only view of accounts outside their own book:
+  // contact info + log a note, no history/revenue/schedule.
+  const restricted = role === 'field_sales' && !ownsAccount(customer, myEmail);
+  // Call-center staff, admins and owners can reassign accounts to a rep.
+  const canAssign = role === 'admin' || role === 'owner' || role === 'inside_sales' || role === 'customer_service';
+
+  // Assignment panel state
+  const [showAssign, setShowAssign] = useState(false);
+  const [reps, setReps] = useState<SalesRep[]>([]);
+  const [assignTo, setAssignTo] = useState('');
+  const [assigning, setAssigning] = useState(false);
+  const [assignedDone, setAssignedDone] = useState(false);
+  useEffect(() => {
+    if (showAssign && reps.length === 0 && isGASConfigured()) {
+      fetchUsers()
+        .then(us => setReps(us.filter(u => u.role === 'field_sales' || u.role === 'inside_sales')))
+        .catch(() => {});
+    }
+  }, [showAssign, reps.length]);
+
+  const handleAssign = async () => {
+    const rep = reps.find(r => r.email === assignTo);
+    if (!rep) return;
+    setAssigning(true);
+    await assignAccount(customer, rep.email, rep.name);
+    setAssigning(false);
+    setAssignedDone(true);
+    setTimeout(() => { setAssignedDone(false); setShowAssign(false); }, 1800);
+  };
+
+  // Request-access state (restricted reps)
+  const [requesting, setRequesting] = useState(false);
+  const [requested, setRequested] = useState(false);
+  const handleRequestAccess = async () => {
+    setRequesting(true);
+    await requestAccess(customer);
+    setRequesting(false);
+    setRequested(true);
+  };
   const { isTokenValid, accessToken, signature: gmailSig } = useGmailStore();
   const { signatures, getDefault } = useSettingsStore();
   const defaultSig = getDefault();
@@ -153,12 +195,13 @@ export default function CustomerModal({ customer, onClose }: CustomerModalProps)
   const currentYear = new Date().getFullYear().toString();
 
   const handleSave = async () => {
-    if (!notes.trim() || !logType) return;
+    const effectiveType: ActivityType | '' = restricted ? 'note' : logType;
+    if (!notes.trim() || !effectiveType) return;
     setSaving(true);
     addActivity({
       id: `a_${Date.now()}`,
       customerId: customer.id,
-      type: logType,
+      type: effectiveType,
       date: new Date().toISOString(),
       repName: currentUser?.name ?? 'Unknown',
       summary: notes.trim(),
@@ -224,11 +267,13 @@ export default function CustomerModal({ customer, onClose }: CustomerModalProps)
 
   const [tab, setTab] = useState<'activity' | 'schedule' | 'revenue'>('activity');
 
-  const TABS = [
-    { id: 'activity' as const, label: 'Activity' },
-    { id: 'schedule' as const, label: 'Schedule' },
-    ...(revenueTable.length > 0 ? [{ id: 'revenue' as const, label: 'Revenue' }] : []),
-  ];
+  const TABS = restricted
+    ? [{ id: 'activity' as const, label: 'Log Note' }]
+    : [
+        { id: 'activity' as const, label: 'Activity' },
+        { id: 'schedule' as const, label: 'Schedule' },
+        ...(revenueTable.length > 0 ? [{ id: 'revenue' as const, label: 'Revenue' }] : []),
+      ];
 
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center p-0 md:p-4">
@@ -322,17 +367,59 @@ export default function CustomerModal({ customer, onClose }: CustomerModalProps)
             </span>
           </div>
 
-          {/* Email button */}
-          {contacts.length > 0 && (
-            <button
-              onClick={() => { setTab('activity'); setShowCompose(!showCompose); }}
-              className={`mt-3 flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold transition-all w-full justify-center ${
-                showCompose ? 'bg-amber-500 text-white' : 'bg-white/10 text-white hover:bg-white/20'
-              }`}
-            >
-              <Send size={12} />
-              {showCompose ? 'Close Compose' : `Email ${customer.name.split(' ')[0]}`}
-            </button>
+          {/* Action buttons */}
+          <div className="flex gap-2 mt-3">
+            {/* Email button — hidden for restricted (read-only) reps */}
+            {!restricted && contacts.length > 0 && (
+              <button
+                onClick={() => { setTab('activity'); setShowCompose(!showCompose); }}
+                className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold transition-all flex-1 justify-center ${
+                  showCompose ? 'bg-amber-500 text-white' : 'bg-white/10 text-white hover:bg-white/20'
+                }`}
+              >
+                <Send size={12} />
+                {showCompose ? 'Close Compose' : `Email ${customer.name.split(' ')[0]}`}
+              </button>
+            )}
+            {/* Assign button — call center / admin / owner */}
+            {canAssign && (
+              <button
+                onClick={() => setShowAssign(v => !v)}
+                className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold transition-all flex-1 justify-center ${
+                  showAssign ? 'bg-amber-500 text-white' : 'bg-white/10 text-white hover:bg-white/20'
+                }`}
+              >
+                <UserPlus size={12} />
+                Assign
+              </button>
+            )}
+          </div>
+
+          {/* Assign panel */}
+          {canAssign && showAssign && (
+            <div className="mt-2 bg-white/5 rounded-xl p-2.5 border border-white/10 space-y-2">
+              <p className="text-[10px] font-bold text-amber-300 uppercase tracking-wider">Reassign account</p>
+              <div className="relative">
+                <select
+                  value={assignTo}
+                  onChange={e => setAssignTo(e.target.value)}
+                  className="w-full bg-white/10 text-white text-xs rounded-md px-2 py-1.5 outline-none border border-white/20 focus:border-amber-400 appearance-none"
+                >
+                  <option value="" className="text-gray-800">Select a rep…</option>
+                  {reps.map(r => <option key={r.email} value={r.email} className="text-gray-800">{r.name} ({r.email})</option>)}
+                </select>
+                <ChevronDown size={11} className="absolute right-2 top-1/2 -translate-y-1/2 text-blue-300 pointer-events-none" />
+              </div>
+              <button
+                onClick={handleAssign}
+                disabled={!assignTo || assigning}
+                className={`w-full text-[11px] font-bold py-1.5 rounded-md transition-colors ${
+                  assignedDone ? 'bg-green-500 text-white' : 'bg-amber-500 hover:bg-amber-600 disabled:bg-gray-600 text-white'
+                }`}
+              >
+                {assignedDone ? '✓ Assigned & rep notified' : assigning ? 'Assigning…' : 'Assign to rep'}
+              </button>
+            </div>
           )}
         </div>
 
@@ -359,6 +446,28 @@ export default function CustomerModal({ customer, onClose }: CustomerModalProps)
           {/* Activity tab */}
           {tab === 'activity' && (
             <div className="p-4 space-y-4">
+
+              {/* Restricted-access banner for reps outside their book */}
+              {restricted && (
+                <div className="rounded-xl border border-amber-200 bg-amber-50 p-3">
+                  <div className="flex items-center gap-2 mb-1">
+                    <Lock size={13} className="text-amber-600" />
+                    <p className="text-[11px] font-black text-amber-700 uppercase tracking-wider">Not your account</p>
+                  </div>
+                  <p className="text-[11px] text-amber-700/80 leading-relaxed">
+                    This account is assigned to {customer.assignedRepName || 'another rep'}. You can see contact info and log a note, but not its history or sales. Request access for the full record.
+                  </p>
+                  <button
+                    onClick={handleRequestAccess}
+                    disabled={requesting || requested}
+                    className={`mt-2 w-full text-[11px] font-bold py-1.5 rounded-lg transition-colors ${
+                      requested ? 'bg-green-500 text-white' : 'bg-amber-500 hover:bg-amber-600 disabled:bg-amber-300 text-white'
+                    }`}
+                  >
+                    {requested ? '✓ Access requested — admin notified' : requesting ? 'Sending…' : 'Request access'}
+                  </button>
+                </div>
+              )}
 
               {/* Compose */}
               {showCompose && (
@@ -445,34 +554,42 @@ export default function CustomerModal({ customer, onClose }: CustomerModalProps)
                   rows={2}
                   className="w-full bg-gray-50 border border-gray-200 rounded-lg px-2.5 py-2 text-xs text-gray-700 outline-none resize-none focus:border-amber-400 transition-colors"
                 />
-                <div className="flex gap-2">
-                  <div className="relative flex-1">
-                    <select value={logType} onChange={e => setLogType(e.target.value as ActivityType | '')} className={`w-full bg-gray-50 border rounded-lg px-2.5 py-1.5 text-xs outline-none appearance-none focus:border-amber-400 ${logType ? 'border-gray-200 text-gray-700' : 'border-amber-300 text-gray-400'}`}>
-                      <option value="" disabled>Select type…</option>
-                      <option value="call">Phone Call</option>
-                      <option value="visit">Field Visit</option>
-                      <option value="email">Email</option>
-                      <option value="note">Note</option>
-                    </select>
-                    <ChevronDown size={10} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                {restricted ? (
+                  <div className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-lg px-2.5 py-1.5">
+                    <FileText size={11} className="text-gray-400" />
+                    <span className="text-xs text-gray-500">Logged as a note</span>
                   </div>
-                  <input type="date" value={followUp} onChange={e => setFollowUp(e.target.value)} className="flex-1 bg-gray-50 border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs text-gray-700 outline-none focus:border-amber-400" />
-                </div>
+                ) : (
+                  <div className="flex gap-2">
+                    <div className="relative flex-1">
+                      <select value={logType} onChange={e => setLogType(e.target.value as ActivityType | '')} className={`w-full bg-gray-50 border rounded-lg px-2.5 py-1.5 text-xs outline-none appearance-none focus:border-amber-400 ${logType ? 'border-gray-200 text-gray-700' : 'border-amber-300 text-gray-400'}`}>
+                        <option value="" disabled>Select type…</option>
+                        <option value="call">Phone Call</option>
+                        <option value="visit">Field Visit</option>
+                        <option value="email">Email</option>
+                        <option value="note">Note</option>
+                      </select>
+                      <ChevronDown size={10} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                    </div>
+                    <input type="date" value={followUp} onChange={e => setFollowUp(e.target.value)} className="flex-1 bg-gray-50 border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs text-gray-700 outline-none focus:border-amber-400" />
+                  </div>
+                )}
                 <button
                   onClick={handleSave}
-                  disabled={!notes.trim() || !logType || saving}
+                  disabled={!notes.trim() || (!restricted && !logType) || saving}
                   className={`w-full py-2 rounded-lg font-bold text-xs transition-all ${
                     saved ? 'bg-green-500 text-white' :
                     saving ? 'bg-gray-200 text-gray-400' :
-                    notes.trim() && logType ? 'bg-[#0F2A4A] hover:bg-[#1a3a5c] text-white' :
+                    notes.trim() && (restricted || logType) ? 'bg-[#0F2A4A] hover:bg-[#1a3a5c] text-white' :
                     'bg-gray-100 text-gray-400'
                   }`}
                 >
-                  {saved ? '✓ Saved' : saving ? 'Saving…' : !logType && notes.trim() ? 'Pick a type to save' : 'Save Activity'}
+                  {saved ? '✓ Saved' : saving ? 'Saving…' : !restricted && !logType && notes.trim() ? 'Pick a type to save' : 'Save Activity'}
                 </button>
               </div>
 
-              {/* Divider */}
+              {/* Divider — history hidden for restricted reps */}
+              {!restricted && (
               <div className="border-t border-gray-100 pt-1">
                 <p className="text-[10px] font-black text-gray-500 uppercase tracking-wider mb-3">
                   History {activities.length > 0 && <span className="text-gray-400 font-normal normal-case">({activities.length})</span>}
@@ -558,6 +675,7 @@ export default function CustomerModal({ customer, onClose }: CustomerModalProps)
                   })}
                 </div>
               </div>
+              )}
             </div>
           )}
 

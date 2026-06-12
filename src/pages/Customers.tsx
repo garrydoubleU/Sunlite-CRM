@@ -9,7 +9,7 @@ type TierFilter = 'all' | '1' | '2' | '3' | '4';
 type FreqFilter = 'all' | VisitFrequency;
 
 export default function Customers() {
-  const { customers } = useCustomerStore();
+  const { customers, directory } = useCustomerStore();
   const [search, setSearch] = useState('');
   const [tierFilter, setTierFilter] = useState<TierFilter>('all');
   const [freqFilter, setFreqFilter] = useState<FreqFilter>('all');
@@ -17,7 +17,10 @@ export default function Customers() {
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
 
   const filtered = useMemo(() => {
-    return customers.filter(c => {
+    // When searching, reach across the full company directory so reps can find
+    // accounts outside their own book (they open read-only). Otherwise show their book.
+    const source = search.trim() ? directory : customers;
+    return source.filter(c => {
       if (search) {
         const q = search.toLowerCase();
         if (!c.name.toLowerCase().includes(q) && !c.id.toLowerCase().includes(q) && !c.territory.toLowerCase().includes(q)) return false;
@@ -28,7 +31,7 @@ export default function Customers() {
       if (statusFilter === 'inactive' && c.activeStatus) return false;
       return true;
     });
-  }, [customers, search, tierFilter, freqFilter, statusFilter]);
+  }, [customers, directory, search, tierFilter, freqFilter, statusFilter]);
 
   function clearFilters() {
     setSearch('');
@@ -49,7 +52,7 @@ export default function Customers() {
             <input
               value={search}
               onChange={e => setSearch(e.target.value)}
-              placeholder="Search by name, ID, or territory..."
+              placeholder="Search any account by name, ID, or territory..."
               className="flex-1 bg-transparent text-sm text-gray-700 placeholder-gray-400 outline-none"
             />
             {search && (

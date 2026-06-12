@@ -1,272 +1,579 @@
-// ============================================================
-// Sunlite Sales & Routing Hub — Google Apps Script Backend
-// Deploy as: Web App → Execute as Me → Anyone can access
-// ============================================================
+/**
+ * GOOGLE APPS SCRIPT — SUNLITE CRM HUB
+ * Version 3.0 — clean consolidated build
+ *
+ * Handles: login, customers (own + all), logs (read/save/delete), users,
+ *          quick links, email send, gmail sync, customer-email update,
+ *          account assignment + alerts, and access requests.
+ *
+ * Deploy: Deploy > New deployment > Web app > Execute as "Me",
+ *         Access "Anyone". Copy the /exec URL into the app's VITE_GAS_URL.
+ *         Re-deploy a NEW VERSION every time you change this file.
+ *
+ * Sheets used (auto-created when missing): Customers, Users, Log,
+ *         "quick links", Assignments, AccessRequests.
+ */
 
-const SHEET_ID = '1Y5Hf98dhR-T0O7KoG-E456NI4mtvWO2yES_DGvbJOm4';
+function doGet(e) {
+  if (!e || !e.parameter) {
+    return createJsonResponse({
+      error: "Run via the deployed Web App URL, not the editor.",
+      help: "Deploy > New Deployment > Web App."
+    });
+  }
 
-function getSpreadsheet() {
-  return SpreadsheetApp.openById(SHEET_ID);
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const action = e.parameter.action;
+  const userEmail = (e.parameter.userEmail || "").toString().toLowerCase().trim();
+
+  try {
+    // ───────────────────────────────────────── 1. LOGIN
+    if (action === "login") {
+      const password = (e.parameter.password || "").toString().trim();
+      const userSheet = ss.getSheetByName("Users");
+      const userData = userSheet.getDataRange().getValues();
+      const headers = userData[0].map(h => h.toString().toLowerCase().trim());
+      const emailIdx = headers.indexOf("email");
+      const passIdx = headers.indexOf("password");
+      const roleIdx = headers.indexOf("role");
+      const nameIdx = headers.indexOf("username");
+
+      const userRow = userData.slice(1).find(row =>
+        row[emailIdx]?.toString().toLowerCase().trim() === userEmail &&
+        row[passIdx]?.toString().trim() === password
+      );
+      if (!userRow) return createJsonResponse({ error: "Invalid credentials" });
+
+      return createJsonResponse({
+        status: "Success",
+        userRole: userRow[roleIdx],
+        userName: userRow[nameIdx] || userEmail.split('@')[0]
+      });
+    }
+
+    // ───────────────────────────────────────── 2. GET CUSTOMERS (rep-filtered)
+    if (action === "getCustomers") {
+      const customerSheet = ss.getSheetByName("Customers");
+      const data = customerSheet.getDataRange().getValues();
+      const headers = data[0];
+      const rows = data.slice(1);
+
+      const userSheet = ss.getSheetByName("Users");
+      const userData = userSheet.getDataRange().getValues();
+      const userRecord = userData.find(row => row[0]?.toString().toLowerCase().trim() === userEmail);
+      const role = userRecord ? userRecord[1] : "Salesman";
+      const isAdmin = (role === "Admin" || role === "Administrator" || role === "Owner");
+
+      const repIndex = headers.findIndex(h => {
+        const head = h.toString().toLowerCase();
+        return head.includes("sales rep email") || head.includes("salesrep") || head.includes("rep");
+      });
+
+      const filtered = isAdmin ? rows : rows.filter(row => {
+        const repField = (row[repIndex] || "").toString().toLowerCase();
+        const repList = repField.split(/[,\s;]+/).map(s => s.trim());
+        return repList.includes(userEmail) || repList.includes("open");
+      });
+
+      return createJsonResponse(filtered.map(row => mapCustomerRow(headers, row)));
+    }
+
+    // ───────────────────────────────────────── 2b. GET ALL CUSTOMERS (owner/admin, no filter)
+    if (action === "getAllCustomers") {
+      const customerSheet = ss.getSheetByName("Customers") || ss.getSheets()[0];
+      if (!customerSheet) return createJsonResponse([]);
+      const data = customerSheet.getDataRange().getValues();
+      if (data.length < 2) return createJsonResponse([]);
+      const headers = data[0];
+      const rows = data.slice(1).filter(row => row.some(c => c !== "" && c !== null));
+      return createJsonResponse(rows.map(row => mapCustomerRow(headers, row)));
+    }
+
+    // ───────────────────────────────────────── 3. GET LOGS
+    if (action === "getLogs") {
+      const logSheet = ss.getSheetByName("Log") || ss.getSheetByName("Logs");
+      if (!logSheet) return createJsonResponse([]);
+      const data = logSheet.getDataRange().getValues();
+      const headers = data[0];
+      const rows = data.slice(1).filter(row => row[0] !== "" && row[0] !== null);
+      const result = rows.map(row => {
+        const obj = {};
+        headers.forEach((h, i) => {
+          const key = h.toString().replace(/\s+/g, '');
+          obj[key] = row[i] instanceof Date ? row[i].toISOString() : row[i];
+        });
+        return obj;
+      });
+      return createJsonResponse(result.reverse().slice(0, 2000));
+    }
+
+    // ───────────────────────────────────────── 4. SAVE LOG
+    if (action === "saveLog") {
+      const logSheet = ss.getSheetByName("Log") || ss.getSheetByName("Logs");
+      const customerSheet = ss.getSheetByName("Customers");
+
+      const timestamp = new Date();
+      const customerName = e.parameter.CustomerName || "";
+      const customerID   = e.parameter.CustomerID || "";
+      const notes        = e.parameter.Notes || e.parameter.summary || "";
+      const followUpDate = e.parameter.FollowUpDate || "";
+      const priority     = e.parameter.Priority || "";
+      // Prefer the clean lowercase 'type', fall back to the legacy LogType label
+      const cleanType    = (e.parameter.type || "").toString().toLowerCase().trim();
+      const logType      = e.parameter.LogType || typeLabel(cleanType) || "Note";
+      const id           = e.parameter.id || ("log_" + timestamp.getTime());
+      const visitFrequency = e.parameter.VisitFrequency || "";
+      const visitStartDate = e.parameter.VisitStartDate || "";
+
+      // A. Append to the history log — header-driven so column order never matters
+      const logHeaders = logSheet.getDataRange().getValues()[0].map(h => h.toString().replace(/\s+/g, ""));
+      const row = logHeaders.map(h => {
+        switch (h) {
+          case "ID":           return id;
+          case "Timestamp":    return timestamp;
+          case "UserEmail":    return userEmail;
+          case "CustomerName": return customerName;
+          case "CustomerID":   return customerID;
+          case "Notes":        return notes;
+          case "Reason":       return e.parameter.Reason || "";
+          case "NewEmail":     return e.parameter.NewEmail || "";
+          case "FollowUpDate": return followUpDate;
+          case "LogType":      return logType;
+          case "Type":         return logType;
+          case "Priority":     return priority;
+          default:             return "";
+        }
+      });
+      logSheet.appendRow(row);
+
+      // B. Update the master Customers record (priority / follow-up / routing)
+      const custData = customerSheet.getDataRange().getValues();
+      const custHeaders = custData[0].map(h => h.toString().toLowerCase().trim());
+      const idIdx       = custHeaders.findIndex(h => h.includes("id"));
+      const nameIdx     = custHeaders.findIndex(h => h === "customername" || h === "customer");
+      const priorityIdx = custHeaders.findIndex(h => h === "priority");
+      const followIdx   = custHeaders.findIndex(h => h.includes("followup") || h.includes("follow up"));
+      const freqIdx     = custHeaders.findIndex(h => h.includes("visit frequency") || h === "visitfrequency" || h === "frequency");
+      const dateIdx     = custHeaders.findIndex(h => h.includes("route commencement date") || h.includes("visit start date"));
+
+      for (let i = 1; i < custData.length; i++) {
+        const rowId = custData[i][idIdx]?.toString().trim();
+        const rowName = custData[i][nameIdx]?.toString().trim().toLowerCase();
+        const isMatch = (customerID && rowId === customerID.trim()) ||
+                        (customerName && rowName === customerName.toLowerCase().trim());
+        if (isMatch) {
+          if (priorityIdx !== -1 && priority) customerSheet.getRange(i + 1, priorityIdx + 1).setValue(priority);
+          if (followIdx !== -1 && followUpDate) customerSheet.getRange(i + 1, followIdx + 1).setValue(followUpDate);
+          if (freqIdx !== -1 && visitFrequency) customerSheet.getRange(i + 1, freqIdx + 1).setValue(visitFrequency);
+          if (dateIdx !== -1 && visitStartDate) customerSheet.getRange(i + 1, dateIdx + 1).setValue(visitStartDate);
+          break;
+        }
+      }
+      return createJsonResponse({ status: "Success" });
+    }
+
+    // ───────────────────────────────────────── 4b. DELETE LOG
+    if (action === "deleteLog") {
+      const logSheet = ss.getSheetByName("Log") || ss.getSheetByName("Logs");
+      if (!logSheet) return createJsonResponse({ status: "Error", message: "Log sheet not found" });
+      const id = e.parameter.id || "";
+      if (!id) return createJsonResponse({ status: "Error", message: "No id provided" });
+      const data = logSheet.getDataRange().getValues();
+      const headers = data[0].map(h => h.toString().replace(/\s+/g, ''));
+      const idIdx = headers.indexOf("ID") !== -1 ? headers.indexOf("ID") : headers.indexOf("id");
+      for (let i = 1; i < data.length; i++) {
+        if (idIdx >= 0 && String(data[i][idIdx]).trim() === id.trim()) {
+          logSheet.deleteRow(i + 1);
+          return createJsonResponse({ status: "Success" });
+        }
+      }
+      return createJsonResponse({ status: "Success" });
+    }
+
+    // ───────────────────────────────────────── 5. GET USERS
+    if (action === "getUsers") {
+      const userSheet = ss.getSheetByName("Users");
+      const data = userSheet.getDataRange().getValues();
+      const headers = data[0];
+      const result = data.slice(1).map(row => {
+        const obj = {};
+        headers.forEach((h, i) => {
+          let key = h.toString().trim();
+          if (key.toLowerCase() === "username") key = "name";
+          if (key.toLowerCase() === "email") key = "email";
+          if (key.toLowerCase() === "role") key = "role";
+          obj[key] = row[i];
+        });
+        return obj;
+      });
+      return createJsonResponse(result);
+    }
+
+    // ───────────────────────────────────────── 6. GET QUICK LINKS
+    if (action === "getQuickLinks") {
+      const sheet = ss.getSheetByName("quick links");
+      if (!sheet) return createJsonResponse([]);
+      const data = sheet.getDataRange().getValues();
+      const headers = data[0];
+      return createJsonResponse(data.slice(1).map(row => {
+        const obj = {};
+        headers.forEach((h, i) => {
+          const key = h.toString().trim() || String.fromCharCode(65 + i);
+          obj[key] = row[i];
+        });
+        return obj;
+      }));
+    }
+
+    // ───────────────────────────────────────── 7. SEND EMAIL
+    if (action === "sendEmail") {
+      const to       = e.parameter.to       || "";
+      const subject  = e.parameter.subject  || "(no subject)";
+      const body     = e.parameter.body     || "";
+      const custName = e.parameter.customerName || "";
+      const custId   = e.parameter.customerId   || custName;
+      if (!to) return createJsonResponse({ status: "Error", message: "No recipient" });
+
+      GmailApp.sendEmail(to, subject, body, {
+        name: "Sunlite Sales",
+        replyTo: e.parameter.userEmail || ""
+      });
+
+      const logSheet2 = ss.getSheetByName("Log") || ss.getSheetByName("Logs");
+      if (logSheet2) {
+        const headers = logSheet2.getDataRange().getValues()[0].map(h => h.toString().replace(/\s+/g, ""));
+        const row = headers.map(h => {
+          if (h === "Timestamp")    return new Date();
+          if (h === "UserEmail")    return e.parameter.userEmail || "";
+          if (h === "CustomerName") return custName;
+          if (h === "CustomerID")   return custId;
+          if (h === "Notes")        return "[Email sent] " + subject + "\n" + body.substring(0, 300);
+          if (h === "LogType")      return "Email";
+          if (h === "Type")         return "Email";
+          if (h === "NewEmail")     return to;
+          return "";
+        });
+        logSheet2.appendRow(row);
+      }
+      return createJsonResponse({ status: "Success" });
+    }
+
+    // ───────────────────────────────────────── 8. GMAIL SYNC
+    if (action === "syncEmails") {
+      syncNewCustomerEmails();
+      return createJsonResponse({ status: "ok" });
+    }
+
+    // ───────────────────────────────────────── 9. UPDATE CUSTOMER EMAIL (contacts JSON)
+    if (action === "updateCustomerEmail") {
+      const sheet = ss.getSheetByName("Customers") || ss.getSheets()[0];
+      const data = sheet.getDataRange().getValues();
+      const headers = data[0].map(h => h.toString().replace(/\s+/g, '').toLowerCase());
+      const idIdx = headers.indexOf("id");
+      const emailIdx = headers.findIndex(h => h === "email" || h === "customeremail");
+      if (emailIdx === -1) return createJsonResponse({ error: "No email column found" });
+      for (let i = 1; i < data.length; i++) {
+        if (String(data[i][idIdx]) === e.parameter.customerId) {
+          sheet.getRange(i + 1, emailIdx + 1).setValue(e.parameter.email);
+          return createJsonResponse({ status: "ok" });
+        }
+      }
+      return createJsonResponse({ error: "Customer not found" });
+    }
+
+    // ───────────────────────────────────────── 10. ASSIGN CUSTOMER → rep
+    if (action === "assignCustomer") {
+      const result = assignCustomerToRep(
+        ss,
+        e.parameter.customerId || "",
+        e.parameter.customerName || "",
+        (e.parameter.toEmail || "").toLowerCase().trim(),
+        e.parameter.toName || "",
+        (e.parameter.byEmail || "").toLowerCase().trim(),
+        e.parameter.byName || ""
+      );
+      return createJsonResponse(result);
+    }
+
+    // ───────────────────────────────────────── 11. GET ASSIGNMENTS (for a rep)
+    if (action === "getAssignments") {
+      const repEmail = (e.parameter.repEmail || userEmail || "").toLowerCase().trim();
+      const sheet = getOrCreateSheet(ss, "Assignments", ASSIGNMENT_HEADERS);
+      const data = sheet.getDataRange().getValues();
+      const headers = data[0].map(h => h.toString().replace(/\s+/g, ''));
+      const out = [];
+      for (let i = 1; i < data.length; i++) {
+        const obj = rowToObj(headers, data[i]);
+        if (String(obj.AssignedToEmail || "").toLowerCase().trim() === repEmail &&
+            String(obj.Acknowledged).toLowerCase() !== "true") {
+          out.push(obj);
+        }
+      }
+      return createJsonResponse(out.reverse());
+    }
+
+    // ───────────────────────────────────────── 12. ACKNOWLEDGE ASSIGNMENT
+    if (action === "acknowledgeAssignment") {
+      const sheet = getOrCreateSheet(ss, "Assignments", ASSIGNMENT_HEADERS);
+      setColumnByID(sheet, e.parameter.id || "", "Acknowledged", true);
+      return createJsonResponse({ status: "Success" });
+    }
+
+    // ───────────────────────────────────────── 13. REQUEST ACCESS
+    if (action === "requestAccess") {
+      const sheet = getOrCreateSheet(ss, "AccessRequests", ACCESS_HEADERS);
+      const id = "req_" + new Date().getTime();
+      appendObj(sheet, {
+        ID: id,
+        CustomerID: e.parameter.customerId || "",
+        CustomerName: e.parameter.customerName || "",
+        RequesterEmail: (e.parameter.requesterEmail || "").toLowerCase().trim(),
+        RequesterName: e.parameter.requesterName || "",
+        Date: new Date(),
+        Status: "pending"
+      });
+      return createJsonResponse({ status: "Success", id: id });
+    }
+
+    // ───────────────────────────────────────── 14. GET ACCESS REQUESTS (admin)
+    if (action === "getAccessRequests") {
+      const sheet = getOrCreateSheet(ss, "AccessRequests", ACCESS_HEADERS);
+      const data = sheet.getDataRange().getValues();
+      const headers = data[0].map(h => h.toString().replace(/\s+/g, ''));
+      const out = [];
+      for (let i = 1; i < data.length; i++) {
+        const obj = rowToObj(headers, data[i]);
+        if (String(obj.Status || "pending").toLowerCase() === "pending") out.push(obj);
+      }
+      return createJsonResponse(out.reverse());
+    }
+
+    // ───────────────────────────────────────── 15. RESOLVE ACCESS REQUEST (grant/deny)
+    if (action === "resolveAccessRequest") {
+      const sheet = getOrCreateSheet(ss, "AccessRequests", ACCESS_HEADERS);
+      const id = e.parameter.id || "";
+      const grant = String(e.parameter.grant).toLowerCase() === "true";
+      const data = sheet.getDataRange().getValues();
+      const headers = data[0].map(h => h.toString().replace(/\s+/g, ''));
+      for (let i = 1; i < data.length; i++) {
+        const obj = rowToObj(headers, data[i]);
+        if (String(obj.ID).trim() === id.trim()) {
+          setColumnByID(sheet, id, "Status", grant ? "granted" : "denied");
+          if (grant) {
+            const repName = lookupUserName(ss, obj.RequesterEmail) || obj.RequesterName || "";
+            assignCustomerToRep(ss, obj.CustomerID, obj.CustomerName,
+              String(obj.RequesterEmail).toLowerCase().trim(), repName, "admin", "Admin");
+          }
+          return createJsonResponse({ status: "Success" });
+        }
+      }
+      return createJsonResponse({ status: "Success" });
+    }
+
+    return createJsonResponse({ error: "Action '" + action + "' not handled." });
+
+  } catch (err) {
+    return createJsonResponse({ status: "Error", message: err.toString() });
+  }
 }
 
-// ── CORS helper ──────────────────────────────────────────────
-function buildResponse(data) {
-  return ContentService
-    .createTextOutput(JSON.stringify(data))
+function doPost(e) { return doGet(e); }
+
+function createJsonResponse(data) {
+  return ContentService.createTextOutput(JSON.stringify(data))
     .setMimeType(ContentService.MimeType.JSON);
 }
 
-// ── GET router ───────────────────────────────────────────────
-function doGet(e) {
-  const action = e.parameter.action;
-  try {
-    switch (action) {
-      case 'login':       return buildResponse(handleLogin(e.parameter));
-      case 'getCustomers':return buildResponse(getSheetData('Customers'));
-      case 'getLogs':     return buildResponse(getSheetData('Activities'));
-      case 'getUsers':    return buildResponse(getSheetData('Users'));
-      case 'getQuickLinks': return buildResponse(getSheetData('QuickLinks'));
-      case 'ping':        return buildResponse({ status: 'ok' });
-      // Writes also routed through GET because the frontend sends them as
-      // query params (avoids a CORS preflight on the Apps Script endpoint).
-      case 'saveLog':       return buildResponse(saveLog(e.parameter));
-      case 'updateCustomer':return buildResponse(updateCustomer(e.parameter));
-      case 'updateCustomerEmail': return buildResponse(updateCustomer(e.parameter));
-      case 'deleteLog':     return buildResponse(deleteLog(e.parameter));
-      default:            return buildResponse({ error: 'Unknown action: ' + action });
-    }
-  } catch (err) {
-    return buildResponse({ error: err.toString() });
+// ───────────────────────────────────────── HELPERS
+
+var ASSIGNMENT_HEADERS = ["ID", "CustomerID", "CustomerName", "AssignedToEmail",
+  "AssignedToName", "AssignedByEmail", "AssignedByName", "Date", "Acknowledged"];
+var ACCESS_HEADERS = ["ID", "CustomerID", "CustomerName", "RequesterEmail",
+  "RequesterName", "Date", "Status"];
+
+// Maps a clean lowercase activity type to the human label stored in the sheet
+function typeLabel(t) {
+  switch (t) {
+    case "call":  return "Phone Call";
+    case "visit": return "Visit";
+    case "email": return "Email";
+    case "note":  return "Note";
+    default:      return "";
   }
 }
 
-// ── POST router ──────────────────────────────────────────────
-function doPost(e) {
-  let body = {};
-  try {
-    body = JSON.parse(e.postData.contents);
-  } catch (_) {
-    body = e.parameter;
-  }
-  const action = body.action || e.parameter.action;
-  try {
-    switch (action) {
-      case 'saveLog':       return buildResponse(saveLog(body));
-      case 'updateCustomer':return buildResponse(updateCustomer(body));
-      case 'deleteLog':     return buildResponse(deleteLog(body));
-      default:              return buildResponse({ error: 'Unknown POST action: ' + action });
-    }
-  } catch (err) {
-    return buildResponse({ error: err.toString() });
-  }
-}
-
-// ── Generic sheet reader ──────────────────────────────────────
-function getSheetData(sheetName) {
-  const ss = getSpreadsheet();
-  const sheet = ss.getSheetByName(sheetName);
-  if (!sheet) return { error: 'Sheet not found: ' + sheetName, data: [] };
-
-  const values = sheet.getDataRange().getValues();
-  if (values.length < 2) return { data: [] };
-
-  const headers = values[0].map(h => String(h).trim());
-  const rows = values.slice(1).filter(row => row.some(cell => cell !== ''));
-
-  const data = rows.map(row => {
-    const obj = {};
-    headers.forEach((h, i) => {
-      const val = row[i];
-      // Auto-coerce numbers and booleans
-      if (val === 'TRUE' || val === true) obj[h] = true;
-      else if (val === 'FALSE' || val === false) obj[h] = false;
-      else if (typeof val === 'number') obj[h] = val;
-      else if (val instanceof Date) obj[h] = val.toISOString();
-      else obj[h] = String(val ?? '');
-    });
-    return obj;
+// Normalise a Customers row into the keys the app expects
+function mapCustomerRow(headers, row) {
+  const obj = {};
+  headers.forEach((h, i) => {
+    let key = h.toString().trim();
+    const low = key.toLowerCase();
+    if (low === "customer id") key = "ID";
+    if (low === "customername") key = "Customer";
+    if (low.includes("sales rep email")) key = "SalesRep";
+    if (low === "salesperson name") key = "SalespersonName";
+    if (low === "last order date") key = "LastOrderDate";
+    if (low === "visit frequency") key = "VisitFrequency";
+    if (low === "visit start date") key = "VisitStartDate";
+    const cleanKey = key.replace(/\s+/g, '_');
+    const v = row[i];
+    obj[cleanKey] = v instanceof Date ? v.toISOString() : v;
   });
-
-  return { data };
+  return obj;
 }
 
-// ── Login handler ─────────────────────────────────────────────
-function handleLogin(params) {
-  const email = (params.email || '').toLowerCase().trim();
-  const password = (params.password || '').trim();
+function getOrCreateSheet(ss, name, headers) {
+  let sheet = ss.getSheetByName(name);
+  if (!sheet) {
+    sheet = ss.insertSheet(name);
+    sheet.appendRow(headers);
+  } else if (sheet.getLastRow() === 0) {
+    sheet.appendRow(headers);
+  }
+  return sheet;
+}
 
-  const ss = getSpreadsheet();
-  const sheet = ss.getSheetByName('Users');
-  if (!sheet) return { success: false, error: 'Users sheet not found' };
-
-  const values = sheet.getDataRange().getValues();
-  const headers = values[0].map(h => String(h).trim());
-  const rows = values.slice(1);
-
-  const emailIdx = headers.indexOf('email');
-  const passIdx  = headers.indexOf('password');
-
-  const match = rows.find(row => {
-    const rowEmail = String(row[emailIdx] || '').toLowerCase().trim();
-    const rowPass  = String(row[passIdx]  || '').trim();
-    return rowEmail === email && rowPass === password;
+function rowToObj(headers, row) {
+  const obj = {};
+  headers.forEach((h, i) => {
+    obj[h] = row[i] instanceof Date ? row[i].toISOString() : row[i];
   });
-
-  if (!match) return { success: false, error: 'Invalid email or password' };
-
-  const user = {};
-  headers.forEach((h, i) => { user[h] = match[i]; });
-  delete user.password;
-
-  return { success: true, user };
+  return obj;
 }
 
-// ── Save activity log ─────────────────────────────────────────
-function saveLog(body) {
-  const ss = getSpreadsheet();
-  const sheet = ss.getSheetByName('Activities');
-  if (!sheet) return { success: false, error: 'Activities sheet not found' };
+function appendObj(sheet, obj) {
+  const headers = sheet.getDataRange().getValues()[0].map(h => h.toString().replace(/\s+/g, ''));
+  sheet.appendRow(headers.map(h => (obj[h] !== undefined ? obj[h] : "")));
+}
 
-  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+function setColumnByID(sheet, id, columnName, value) {
+  const data = sheet.getDataRange().getValues();
+  const headers = data[0].map(h => h.toString().replace(/\s+/g, ''));
+  const idIdx = headers.indexOf("ID");
+  const colIdx = headers.indexOf(columnName);
+  if (idIdx === -1 || colIdx === -1) return;
+  for (let i = 1; i < data.length; i++) {
+    if (String(data[i][idIdx]).trim() === String(id).trim()) {
+      sheet.getRange(i + 1, colIdx + 1).setValue(value);
+      return;
+    }
+  }
+}
 
-  const id = body.id || 'a_' + Date.now();
-  const now = new Date().toISOString();
+function lookupUserName(ss, email) {
+  const userSheet = ss.getSheetByName("Users");
+  if (!userSheet) return "";
+  const data = userSheet.getDataRange().getValues();
+  const headers = data[0].map(h => h.toString().toLowerCase().trim());
+  const emailIdx = headers.indexOf("email");
+  const nameIdx = headers.indexOf("username");
+  for (let i = 1; i < data.length; i++) {
+    if (String(data[i][emailIdx]).toLowerCase().trim() === String(email).toLowerCase().trim()) {
+      return data[i][nameIdx] || "";
+    }
+  }
+  return "";
+}
 
-  // Normalise the activity type from any param the frontend might send.
-  // LogType comes through as 'Phone Call'/'Visit'/'Email'/'Note'.
-  var rawType = String(body.type || body.LogType || body.Type || 'note').toLowerCase();
-  var typeMap = {
-    'phone call': 'call', 'phonecall': 'call', 'call': 'call', 'phone': 'call',
-    'visit': 'visit', 'field visit': 'visit', 'email': 'email', 'note': 'note',
-  };
-  var cleanType = typeMap[rawType] || 'note';
-
-  // Build a lookup that tolerates either schema's column names.
-  function val(h) {
-    var key = String(h).toLowerCase().replace(/\s+/g, '');
-    switch (key) {
-      case 'id':           return id;
-      case 'customerid':   return body.customerId || body.CustomerID || '';
-      case 'customername': return body.CustomerName || body.customerName || '';
-      case 'type':
-      case 'logtype':      return cleanType;
-      case 'date':
-      case 'timestamp':    return body.date || now;
-      case 'repname':      return body.repName || body.RepName || body.userEmail || '';
-      case 'useremail':    return body.userEmail || body.UserEmail || '';
-      case 'summary':
-      case 'notes':        return body.summary || body.Notes || '';
-      case 'source':       return body.source || 'manual';
-      case 'followupdate': return body.followUpDate || body.FollowUpDate || '';
-      default:             return body[h] !== undefined ? body[h] : '';
+// Writes the new rep onto the Customers row AND logs an assignment record
+function assignCustomerToRep(ss, customerId, customerName, toEmail, toName, byEmail, byName) {
+  const customerSheet = ss.getSheetByName("Customers");
+  if (customerSheet) {
+    const data = customerSheet.getDataRange().getValues();
+    const headers = data[0].map(h => h.toString().toLowerCase().trim());
+    const idIdx = headers.findIndex(h => h.includes("id"));
+    const nameIdx = headers.findIndex(h => h === "customername" || h === "customer");
+    const repIdx = headers.findIndex(h => h.includes("sales rep email") || h.includes("salesrep") || h.includes("rep"));
+    const repNameIdx = headers.findIndex(h => h === "salesperson name" || h === "salespersonname");
+    for (let i = 1; i < data.length; i++) {
+      const rowId = data[i][idIdx]?.toString().trim();
+      const rowName = data[i][nameIdx]?.toString().trim().toLowerCase();
+      const isMatch = (customerId && rowId === customerId.trim()) ||
+                      (customerName && rowName === customerName.toLowerCase().trim());
+      if (isMatch) {
+        if (repIdx !== -1) customerSheet.getRange(i + 1, repIdx + 1).setValue(toEmail);
+        if (repNameIdx !== -1 && toName) customerSheet.getRange(i + 1, repNameIdx + 1).setValue(toName);
+        break;
+      }
     }
   }
 
-  var row = headers.map(val);
-  sheet.appendRow(row);
-  return { success: true, id: id, type: cleanType };
+  const sheet = getOrCreateSheet(ss, "Assignments", ASSIGNMENT_HEADERS);
+  appendObj(sheet, {
+    ID: "asg_" + new Date().getTime(),
+    CustomerID: customerId,
+    CustomerName: customerName,
+    AssignedToEmail: toEmail,
+    AssignedToName: toName,
+    AssignedByEmail: byEmail,
+    AssignedByName: byName,
+    Date: new Date(),
+    Acknowledged: false
+  });
+  return { status: "Success" };
 }
 
-// ── Update customer field ─────────────────────────────────────
-function updateCustomer(body) {
-  const ss = getSpreadsheet();
-  const sheet = ss.getSheetByName('Customers');
-  if (!sheet) return { success: false, error: 'Customers sheet not found' };
+/**
+ * Scans Gmail for emails from customer addresses (last 2 days) and logs
+ * them as gmail-auto entries. Wire to a daily time-driven trigger.
+ */
+function syncNewCustomerEmails() {
+  const ss        = SpreadsheetApp.getActiveSpreadsheet();
+  const custSheet = ss.getSheetByName("Customers") || ss.getSheets()[0];
+  const logSheet  = ss.getSheetByName("Log")       || ss.getSheetByName("Logs");
+  if (!custSheet || !logSheet) return;
 
-  const values = sheet.getDataRange().getValues();
-  const headers = values[0].map(h => String(h).trim());
-  const idIdx = headers.indexOf('id');
+  const custData    = custSheet.getDataRange().getValues();
+  const custHeaders = custData[0].map(h => h.toString().replace(/\s+/g, "").toLowerCase());
+  const emailIdx    = custHeaders.indexOf("email")        !== -1 ? custHeaders.indexOf("email") :
+                      custHeaders.indexOf("customeremail") !== -1 ? custHeaders.indexOf("customeremail") : -1;
+  const nameIdx     = custHeaders.indexOf("customername") !== -1 ? custHeaders.indexOf("customername") :
+                      custHeaders.indexOf("customer")     !== -1 ? custHeaders.indexOf("customer") : 1;
+  const idIdx       = custHeaders.indexOf("id") !== -1 ? custHeaders.indexOf("id") : 0;
 
-  for (let i = 1; i < values.length; i++) {
-    if (String(values[i][idIdx]) === String(body.id)) {
-      Object.keys(body).forEach(key => {
-        if (key === 'id') return;
-        const colIdx = headers.indexOf(key);
-        if (colIdx >= 0) {
-          sheet.getRange(i + 1, colIdx + 1).setValue(body[key]);
-        }
+  const customerMap = {};
+  for (let i = 1; i < custData.length; i++) {
+    const email = emailIdx >= 0 ? String(custData[i][emailIdx]).toLowerCase().trim() : "";
+    if (email && email.includes("@")) {
+      customerMap[email] = { name: String(custData[i][nameIdx] || ""), id: String(custData[i][idIdx] || "") };
+    }
+  }
+
+  const logData    = logSheet.getDataRange().getValues();
+  const logHeaders = logData[0].map(h => h.toString().replace(/\s+/g, "").toLowerCase());
+  const notesIdx   = logHeaders.indexOf("notes");
+  const logged = {};
+  for (let i = 1; i < logData.length; i++) {
+    const m = String(logData[i][notesIdx] || "").match(/\[gmail-id:([^\]]+)\]/);
+    if (m) logged[m[1]] = true;
+  }
+
+  const threads = GmailApp.search("newer_than:2d", 0, 100);
+  threads.forEach(thread => {
+    thread.getMessages().forEach(msg => {
+      const msgId = msg.getId();
+      if (logged[msgId]) return;
+      const fromRaw = msg.getFrom();
+      const fromMatch = fromRaw.match(/<(.+?)>/);
+      const fromEmail = (fromMatch ? fromMatch[1] : fromRaw).toLowerCase().trim();
+      const customer = customerMap[fromEmail];
+      if (!customer) return;
+
+      const logHeaders2 = logSheet.getDataRange().getValues()[0].map(h => h.toString().replace(/\s+/g, ""));
+      const row = logHeaders2.map(h => {
+        if (h === "Timestamp")    return msg.getDate();
+        if (h === "UserEmail")    return "gmail-auto";
+        if (h === "CustomerName") return customer.name;
+        if (h === "CustomerID")   return customer.id;
+        if (h === "Notes")        return "[gmail-auto] [gmail-id:" + msgId + "] " + msg.getSubject() + "\n" +
+                                         msg.getPlainBody().substring(0, 400).replace(/\n+/g, " ");
+        if (h === "LogType")      return "Email";
+        if (h === "Type")         return "Email";
+        if (h === "NewEmail")     return fromEmail;
+        return "";
       });
-      return { success: true };
-    }
-  }
-  return { success: false, error: 'Customer not found: ' + body.id };
-}
-
-// ── Delete activity log ───────────────────────────────────────
-function deleteLog(body) {
-  const ss = getSpreadsheet();
-  const sheet = ss.getSheetByName('Activities');
-  if (!sheet) return { success: false, error: 'Activities sheet not found' };
-
-  const values = sheet.getDataRange().getValues();
-  const headers = values[0].map(h => String(h).trim());
-  const idIdx = headers.indexOf('id');
-
-  for (let i = 1; i < values.length; i++) {
-    if (String(values[i][idIdx]) === String(body.id)) {
-      sheet.deleteRow(i + 1);
-      return { success: true };
-    }
-  }
-  return { success: false, error: 'Log not found: ' + body.id };
-}
-
-// ── Sheet setup helper (run once manually) ────────────────────
-function setupSheets() {
-  const ss = getSpreadsheet();
-
-  const schemas = {
-    Users: ['id','name','email','password','role','territory','avatarInitials'],
-    Customers: ['id','name','assignedRepId','assignedRepName','territory','billingAddress',
-                'phone','email','priorityTier','customerClass','visitFrequency',
-                'lastContactDate','activeStatus','openOrderCount','revenue','dayOfWeek'],
-    Activities: ['id','customerId','type','date','repName','summary','source','followUpDate'],
-    QuickLinks: ['id','label','icon','description','color','url'],
-  };
-
-  Object.entries(schemas).forEach(([name, headers]) => {
-    let sheet = ss.getSheetByName(name);
-    if (!sheet) {
-      sheet = ss.insertSheet(name);
-    }
-    // Only write headers if sheet is empty
-    if (sheet.getLastRow() === 0) {
-      sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
-      sheet.getRange(1, 1, 1, headers.length)
-        .setFontWeight('bold')
-        .setBackground('#0F2A4A')
-        .setFontColor('#FFFFFF');
-      sheet.setFrozenRows(1);
-    }
+      logSheet.appendRow(row);
+    });
   });
-
-  // Seed Users sheet with demo reps if empty
-  const userSheet = ss.getSheetByName('Users');
-  if (userSheet.getLastRow() <= 1) {
-    const users = [
-      ['rep1','Lipa Cohen','lipa@sunlite.com','demo123','admin','Brooklyn','LC'],
-      ['rep2','David Stern','david@sunlite.com','demo123','field_sales','Queens','DS'],
-      ['rep3','Sarah Klein','sarah@sunlite.com','demo123','inside_sales','Manhattan','SK'],
-      ['rep4','Mike Rosen','mike@sunlite.com','demo123','customer_service','Bronx','MR'],
-    ];
-    userSheet.getRange(2, 1, users.length, users[0].length).setValues(users);
-  }
-
-  // Seed QuickLinks if empty
-  const qlSheet = ss.getSheetByName('QuickLinks');
-  if (qlSheet.getLastRow() <= 1) {
-    const links = [
-      ['ql1','Product Catalog','BookOpen','Full product catalog & specs','bg-blue-50 text-blue-600','#'],
-      ['ql2','Price Sheet','DollarSign','Current pricing by category','bg-green-50 text-green-600','#'],
-      ['ql3','Order Entry','ShoppingCart','Acumatica order entry portal','bg-amber-50 text-amber-600','#'],
-      ['ql4','Internal Docs','FileText','Policies, SOPs, and training','bg-purple-50 text-purple-600','#'],
-      ['ql5','Territory Map','Map','Rep territory boundaries','bg-teal-50 text-teal-600','#'],
-      ['ql6','CRM Reports','BarChart2','Sales activity reports','bg-indigo-50 text-indigo-600','#'],
-      ['ql7','Sample Requests','Package','Request product samples','bg-orange-50 text-orange-600','#'],
-      ['ql8','Support Desk','Headphones','Internal IT & ops support','bg-red-50 text-red-500','#'],
-    ];
-    qlSheet.getRange(2, 1, links.length, links[0].length).setValues(links);
-  }
-
-  Logger.log('✅ Sheet setup complete. Tabs: ' + Object.keys(schemas).join(', '));
+  Logger.log("syncNewCustomerEmails complete");
 }

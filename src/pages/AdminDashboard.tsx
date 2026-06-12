@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Users, AlertTriangle, Clock, TrendingUp, Phone, Mail, MapPin, FileText } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Users, AlertTriangle, Clock, TrendingUp, Phone, Mail, MapPin, FileText, KeyRound, Check, X } from 'lucide-react';
 import { useCustomerStore } from '../store/customerStore';
 import { safeDaysSince, safeFormat } from '../utils/scheduler';
 import CustomerModal from '../components/CustomerModal';
@@ -21,9 +21,12 @@ const ACT_ICON: Record<string, { icon: typeof Phone; color: string }> = {
 };
 
 export default function AdminDashboard() {
-  const { customers, activities } = useCustomerStore();
+  const { customers, activities, accessRequests, loadAccessRequests, resolveAccessRequest } = useCustomerStore();
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [untouchedTier, setUntouchedTier] = useState<number>(1);
+
+  useEffect(() => { loadAccessRequests(); }, [loadAccessRequests]);
+  const pendingRequests = accessRequests.filter(r => r.status === 'pending');
 
   const now = new Date();
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -120,6 +123,41 @@ export default function AdminDashboard() {
           </div>
         ))}
       </div>
+
+      {/* ── Account access requests ──────────────────────────────── */}
+      {pendingRequests.length > 0 && (
+        <div className="bg-white rounded-2xl border border-amber-200 shadow-sm overflow-hidden">
+          <div className="px-5 py-3 bg-amber-50 border-b border-amber-200 flex items-center gap-2">
+            <KeyRound size={14} className="text-amber-600" />
+            <h3 className="text-xs font-black text-amber-700 uppercase tracking-wider">Access Requests</h3>
+            <span className="text-[10px] font-bold bg-amber-500 text-white px-2 py-0.5 rounded-full ml-auto">{pendingRequests.length}</span>
+          </div>
+          <div className="divide-y divide-gray-50">
+            {pendingRequests.map(req => (
+              <div key={req.id} className="flex items-center gap-3 px-5 py-3">
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-gray-800 truncate">
+                    {req.requesterName || req.requesterEmail} wants access to <span className="font-black">{req.customerName}</span>
+                  </p>
+                  <p className="text-[10px] text-gray-400 truncate">{req.requesterEmail} · {safeFormat(req.date, 'MMM d, h:mm a')}</p>
+                </div>
+                <button
+                  onClick={() => resolveAccessRequest(req.id, true)}
+                  className="flex items-center gap-1 text-[11px] font-bold text-green-700 bg-green-100 hover:bg-green-200 px-3 py-1.5 rounded-lg transition-colors flex-shrink-0"
+                >
+                  <Check size={12} /> Grant
+                </button>
+                <button
+                  onClick={() => resolveAccessRequest(req.id, false)}
+                  className="flex items-center gap-1 text-[11px] font-bold text-gray-500 bg-gray-100 hover:bg-gray-200 px-3 py-1.5 rounded-lg transition-colors flex-shrink-0"
+                >
+                  <X size={12} /> Deny
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* ── Main grid ─────────────────────────────────────────────── */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">

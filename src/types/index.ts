@@ -50,6 +50,28 @@ export interface Activity {
   followUpDate?: string;
 }
 
+export interface Assignment {
+  id: string;
+  customerId: string;
+  customerName: string;
+  assignedToEmail: string;
+  assignedToName: string;
+  assignedByEmail: string;
+  assignedByName: string;
+  date: string;
+  acknowledged: boolean;
+}
+
+export interface AccessRequest {
+  id: string;
+  customerId: string;
+  customerName: string;
+  requesterEmail: string;
+  requesterName: string;
+  date: string;
+  status: 'pending' | 'granted' | 'denied';
+}
+
 export interface Route {
   customerId: string;
   frequency: VisitFrequency;

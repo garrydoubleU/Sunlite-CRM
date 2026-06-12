@@ -1,12 +1,26 @@
 import { create } from 'zustand';
-import type { Customer, Activity } from '../types';
+import type { Customer, Activity, Assignment, AccessRequest } from '../types';
 import { CUSTOMERS, ACTIVITIES } from '../api/mockData';
 import {
   fetchCustomers, fetchAllCustomers, fetchActivities, saveActivity as gasSave,
   deleteActivity as gasDelete, isGASConfigured, triggerEmailSync,
+  assignCustomer as gasAssign, fetchAssignments, acknowledgeAssignment as gasAck,
+  requestAccess as gasRequestAccess, fetchAccessRequests, resolveAccessRequest as gasResolve,
   type GASCustomer, type GASActivity,
 } from '../api/sheets';
 import { useAuthStore } from './authStore';
+
+// An account belongs to a rep if their email appears in the (possibly
+// comma/semicolon-separated) Sales Rep Email field. Owner/admin see everything.
+export function ownsAccount(customer: Customer, email: string): boolean {
+  if (!email) return false;
+  const reps = String(customer.assignedRepId ?? '')
+    .toLowerCase()
+    .split(/[,;\s]+/)
+    .map(s => s.trim())
+    .filter(Boolean);
+  return reps.includes(email.toLowerCase().trim()) || reps.includes('open');
+}
 
 function gasCustomerToLocal(c: GASCustomer): Customer {
   return {
@@ -44,7 +58,14 @@ function gasActivityToLocal(a: GASActivity): Activity {
 
 interface CustomerState {
   customers: Customer[];
+  // Full company-wide account list — used so reps can SEARCH accounts
+  // outside their own book (read-only). For owner/admin this equals customers.
+  directory: Customer[];
   activities: Activity[];
+  // Accounts assigned to the current rep (drives the "new account" alert)
+  assignments: Assignment[];
+  // Pending access requests (admin view)
+  accessRequests: AccessRequest[];
   lastSync: Date | null;
   isSyncing: boolean;
   syncError: string | null;
@@ -60,12 +81,21 @@ interface CustomerState {
   updateActivity: (id: string, updates: Partial<Activity>) => void;
   deleteActivity: (id: string) => void;
   getActivitiesForCustomer: (customerId: string) => Activity[];
+  // Assignment & access-request flows
+  assignAccount: (customer: Customer, toEmail: string, toName: string) => Promise<void>;
+  acknowledgeAssignment: (id: string) => void;
+  requestAccess: (customer: Customer) => Promise<void>;
+  loadAccessRequests: () => Promise<void>;
+  resolveAccessRequest: (id: string, grant: boolean) => Promise<void>;
 }
 
 export const useCustomerStore = create<CustomerState>((set, get) => ({
   // Start with mock data so the UI is never blank while GAS loads
   customers: CUSTOMERS,
+  directory: CUSTOMERS,
   activities: ACTIVITIES,
+  assignments: [],
+  accessRequests: [],
   lastSync: null,
   isSyncing: false,
   isSyncingEmails: false,
@@ -75,20 +105,38 @@ export const useCustomerStore = create<CustomerState>((set, get) => ({
     if (!isGASConfigured()) return; // stay on mock data
     set({ isSyncing: true, syncError: null });
     const currentUser = useAuthStore.getState().currentUser;
+    const email = currentUser?.email ?? '';
     // Owners and admins see every account — pass no email so GAS returns all.
     // Reps get only their assigned book, filtered server-side by email.
     const seesAll = currentUser?.role === 'owner' || currentUser?.role === 'admin';
     try {
       const [rawCustomers, rawActivities] = await Promise.all([
-        seesAll ? fetchAllCustomers() : fetchCustomers(currentUser?.email ?? ''),
+        seesAll ? fetchAllCustomers() : fetchCustomers(email),
         fetchActivities(),
       ]);
+      const customers = rawCustomers.map(gasCustomerToLocal);
       set({
-        customers: rawCustomers.map(gasCustomerToLocal),
+        customers,
+        directory: customers, // reps refine this below
         activities: rawActivities.map(gasActivityToLocal),
         lastSync: new Date(),
         isSyncing: false,
       });
+
+      // Reps: load the full directory in the background so search reaches
+      // accounts outside their book, plus any assignments addressed to them.
+      if (!seesAll && email) {
+        fetchAllCustomers()
+          .then(all => set({ directory: all.map(gasCustomerToLocal) }))
+          .catch(() => {});
+        fetchAssignments(email)
+          .then(assignments => set({ assignments }))
+          .catch(() => {});
+      }
+      // Admin: load pending access requests
+      if (currentUser?.role === 'admin') {
+        get().loadAccessRequests();
+      }
     } catch (err) {
       set({
         isSyncing: false,
@@ -172,5 +220,58 @@ export const useCustomerStore = create<CustomerState>((set, get) => ({
         (customerName && a.customerId.toLowerCase() === customerName)
       )
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  },
+
+  assignAccount: async (customer, toEmail, toName) => {
+    const { currentUser } = useAuthStore.getState();
+    // Optimistic local update so the UI reflects the new owner immediately
+    set(state => ({
+      customers: state.customers.map(c =>
+        c.id === customer.id ? { ...c, assignedRepId: toEmail.toLowerCase(), assignedRepName: toName } : c
+      ),
+      directory: state.directory.map(c =>
+        c.id === customer.id ? { ...c, assignedRepId: toEmail.toLowerCase(), assignedRepName: toName } : c
+      ),
+    }));
+    if (isGASConfigured()) {
+      await gasAssign({
+        customerId: customer.id,
+        customerName: customer.name,
+        toEmail,
+        toName,
+        byEmail: currentUser?.email ?? '',
+        byName: currentUser?.name ?? '',
+      }).catch(err => console.error('[GAS] assignCustomer failed:', err));
+    }
+  },
+
+  acknowledgeAssignment: (id: string) => {
+    set(state => ({ assignments: state.assignments.filter(a => a.id !== id) }));
+    if (isGASConfigured()) gasAck(id).catch(() => {});
+  },
+
+  requestAccess: async (customer) => {
+    const { currentUser } = useAuthStore.getState();
+    if (isGASConfigured()) {
+      await gasRequestAccess({
+        customerId: customer.id,
+        customerName: customer.name,
+        requesterEmail: currentUser?.email ?? '',
+        requesterName: currentUser?.name ?? '',
+      }).catch(err => console.error('[GAS] requestAccess failed:', err));
+    }
+  },
+
+  loadAccessRequests: async () => {
+    if (!isGASConfigured()) return;
+    const requests = await fetchAccessRequests().catch(() => []);
+    set({ accessRequests: requests });
+  },
+
+  resolveAccessRequest: async (id, grant) => {
+    set(state => ({ accessRequests: state.accessRequests.filter(r => r.id !== id) }));
+    if (isGASConfigured()) {
+      await gasResolve(id, grant).catch(err => console.error('[GAS] resolveAccessRequest failed:', err));
+    }
   },
 }));

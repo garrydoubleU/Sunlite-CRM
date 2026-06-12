@@ -362,6 +362,106 @@ export async function updateCustomerEmail(customerId: string, email: string): Pr
   await gasPost({ action: 'updateCustomerEmail', customerId, email });
 }
 
+// ── Account assignment & access requests ──────────────────────
+
+import type { Assignment, AccessRequest } from '../types';
+
+// Reassign an account to another rep. Updates the Customers sheet and
+// records an assignment so the new owner sees an alert.
+export async function assignCustomer(params: {
+  customerId: string;
+  customerName: string;
+  toEmail: string;
+  toName: string;
+  byEmail: string;
+  byName: string;
+}): Promise<void> {
+  await gasPost({
+    action: 'assignCustomer',
+    customerId: params.customerId,
+    customerName: params.customerName,
+    toEmail: params.toEmail,
+    toName: params.toName,
+    byEmail: params.byEmail,
+    byName: params.byName,
+  });
+}
+
+function mapRawAssignment(r: Record<string, unknown>, idx: number): Assignment {
+  const o: Record<string, unknown> = {};
+  Object.entries(r).forEach(([k, v]) => { o[String(k).toLowerCase().replace(/\s+/g, '')] = v; });
+  const pick = (...keys: string[]): string => {
+    for (const k of keys) { const v = o[k]; if (v !== undefined && v !== null && String(v) !== '') return String(v); }
+    return '';
+  };
+  return {
+    id: pick('id') || `asg_${idx}`,
+    customerId: pick('customerid', 'custid'),
+    customerName: pick('customername', 'customer'),
+    assignedToEmail: pick('assignedtoemail', 'toemail').toLowerCase(),
+    assignedToName: pick('assignedtoname', 'toname'),
+    assignedByEmail: pick('assignedbyemail', 'byemail').toLowerCase(),
+    assignedByName: pick('assignedbyname', 'byname'),
+    date: safeDate(pick('date', 'timestamp')),
+    acknowledged: String(pick('acknowledged')).toLowerCase() === 'true',
+  };
+}
+
+// Pull assignments addressed to a given rep (unacknowledged ones drive the alert).
+export async function fetchAssignments(repEmail: string): Promise<Assignment[]> {
+  const raw = await gasGet<Record<string, unknown>[] | { error: string }>('getAssignments', { repEmail });
+  return Array.isArray(raw) ? raw.map(mapRawAssignment) : [];
+}
+
+export async function acknowledgeAssignment(id: string): Promise<void> {
+  await gasPost({ action: 'acknowledgeAssignment', id });
+}
+
+// A rep requests access to an account that isn't theirs — admin gets notified.
+export async function requestAccess(params: {
+  customerId: string;
+  customerName: string;
+  requesterEmail: string;
+  requesterName: string;
+}): Promise<void> {
+  await gasPost({
+    action: 'requestAccess',
+    customerId: params.customerId,
+    customerName: params.customerName,
+    requesterEmail: params.requesterEmail,
+    requesterName: params.requesterName,
+  });
+}
+
+function mapRawAccessRequest(r: Record<string, unknown>, idx: number): AccessRequest {
+  const o: Record<string, unknown> = {};
+  Object.entries(r).forEach(([k, v]) => { o[String(k).toLowerCase().replace(/\s+/g, '')] = v; });
+  const pick = (...keys: string[]): string => {
+    for (const k of keys) { const v = o[k]; if (v !== undefined && v !== null && String(v) !== '') return String(v); }
+    return '';
+  };
+  const status = pick('status').toLowerCase();
+  return {
+    id: pick('id') || `req_${idx}`,
+    customerId: pick('customerid', 'custid'),
+    customerName: pick('customername', 'customer'),
+    requesterEmail: pick('requesteremail', 'email').toLowerCase(),
+    requesterName: pick('requestername', 'name'),
+    date: safeDate(pick('date', 'timestamp')),
+    status: status === 'granted' ? 'granted' : status === 'denied' ? 'denied' : 'pending',
+  };
+}
+
+export async function fetchAccessRequests(): Promise<AccessRequest[]> {
+  const raw = await gasGet<Record<string, unknown>[] | { error: string }>('getAccessRequests');
+  return Array.isArray(raw) ? raw.map(mapRawAccessRequest) : [];
+}
+
+// Admin grants a pending request: assigns the account and marks it granted.
+export async function resolveAccessRequest(id: string, grant: boolean): Promise<void> {
+  await gasPost({ action: 'resolveAccessRequest', id, grant: grant ? 'true' : 'false' });
+}
+
 // ── Email sync ────────────────────────────────────────────────
 
 export async function triggerEmailSync(): Promise<void> {

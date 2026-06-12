@@ -4,6 +4,7 @@ import { useCustomerStore } from '../store/customerStore';
 import { useAuthStore } from '../store/authStore';
 import { safeDaysSince, safeFormat } from '../utils/scheduler';
 import CustomerModal from '../components/CustomerModal';
+import AssignmentAlert from '../components/AssignmentAlert';
 import type { Customer } from '../types';
 
 const TIER_STYLE: Record<number, { bg: string; text: string; ring: string }> = {
@@ -152,6 +153,8 @@ export default function CallerDashboard() {
 
   return (
     <div className="space-y-4 max-w-2xl mx-auto">
+
+      <AssignmentAlert />
 
       {/* Header stats */}
       <div className="grid grid-cols-3 gap-3">
