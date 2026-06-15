@@ -263,7 +263,12 @@ function doGet(e) {
         }
       }
 
-      return createJsonResponse({ status: "Success" });
+      const notifyDebug = notifyRep ? {
+        repDisplayName: typeof repDisplayName !== "undefined" ? repDisplayName : "VAR_MISSING",
+        firstRepEmail: typeof firstRepEmail !== "undefined" ? firstRepEmail : "VAR_MISSING",
+        custHeadersSample: custHeaders.slice(0, 10).join(" | ")
+      } : null;
+      return createJsonResponse({ status: "Success", notifyDebug });
     }
 
     // ───────────────────────────────────────── 4b. DELETE LOG
