@@ -1,6 +1,6 @@
 /**
  * GOOGLE APPS SCRIPT — SUNLITE CRM HUB
- * Version 3.3 — Fix rep email lookup ignoring spaces in column headers (salesrepemail vs "sales rep email")
+ * Version 3.4 — Skip CS rep's own email when picking rep to notify (handles accounts where CS email is listed first)
  *
  * Handles: login, customers (own + all), logs (read/save/delete), users,
  *          quick links, email send, gmail sync, customer-email update,
@@ -214,7 +214,10 @@ function doGet(e) {
           }[logType] || "Activity";
           const now = new Date();
           const dateStr = Utilities.formatDate(now, Session.getScriptTimeZone(), "MMM d, yyyy 'at' h:mm a");
-          const firstRepEmail = repEmail.split(/[,;\s]+/)[0].trim();
+          // Skip the CS rep's own email — find the first email that isn't the person logging the note
+          const repEmailList = repEmail.split(/[,;\s]+/).map(e => e.trim().toLowerCase()).filter(Boolean);
+          const firstRepEmail = repEmailList.find(e => e !== userEmail) || repEmailList[0] || "";
+          if (!firstRepEmail) { return createJsonResponse({ status: "Success" }); }
           const firstRepName = repDisplayName ? repDisplayName.split(/[,;\s]+/)[0] : firstRepEmail;
           const emailBody = [
             "Hi " + firstRepName + ",",
