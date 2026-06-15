@@ -207,34 +207,44 @@ function doGet(e) {
         }
         if (repEmail) {
           const csRepName = repName || userEmail;
+          const activityLabel = {
+            call: "Phone Call", visit: "Field Visit", email: "Email", note: "Note"
+          }[logType] || "Activity";
+          const now = new Date();
+          const dateStr = Utilities.formatDate(now, Session.getScriptTimeZone(), "MMM d, yyyy 'at' h:mm a");
+          const firstRepEmail = repEmail.split(/[,;\s]+/)[0].trim();
+          const firstRepName = repDisplayName ? repDisplayName.split(/[,;\s]+/)[0] : firstRepEmail;
           const emailBody = [
-            "Hi " + repDisplayName + ",",
+            "Hi " + firstRepName + ",",
             "",
-            "Customer service spoke with " + customerName + " and wanted to flag it for you:",
+            "A new activity was logged on your account — " + customerName + ":",
+            "",
+            "Type: " + activityLabel,
+            "Date: " + dateStr,
+            "Logged by: " + csRepName,
             "",
             notes,
             "",
-            "Please follow up with them when you get a chance.",
-            "",
-            "— " + csRepName
+            "— Sunlite CRM"
           ].join("\n");
           try {
-            MailApp.sendEmail(repEmail, "CS Note — " + customerName + " needs your follow-up", emailBody);
+            MailApp.sendEmail(firstRepEmail, "New " + activityLabel + " logged — " + customerName, emailBody);
           } catch(mailErr) {
             Logger.log("Rep email failed: " + mailErr.toString());
           }
           // Write to CSHandoffs sheet
           const handoffSheet = getOrCreateSheet(ss, "CSHandoffs",
-            ["ID", "CustomerID", "CustomerName", "RepEmail", "CSName", "Date", "Notes", "Acknowledged"]);
+            ["ID", "CustomerID", "CustomerName", "RepEmail", "CSName", "Date", "Notes", "Acknowledged", "ActivityType"]);
           handoffSheet.appendRow([
             Utilities.getUuid(),
             customerID || customerName,
             customerName,
             repEmail.toLowerCase(),
             csRepName,
-            new Date(),
+            now,
             notes,
-            "false"
+            "false",
+            logType || "note"
           ]);
         }
       }

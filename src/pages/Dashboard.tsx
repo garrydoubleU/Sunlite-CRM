@@ -77,23 +77,34 @@ export default function Dashboard() {
             </div>
             <span className="text-[10px] font-bold bg-amber-500 text-white px-2 py-0.5 rounded-full">{csHandoffs.length}</span>
           </div>
-          <div className="p-3 space-y-2">
-            {csHandoffs.map(h => (
-              <div key={h.id} className="flex items-start gap-3 p-3 rounded-xl bg-gray-50">
-                <div className="flex-1 min-w-0">
-                  <button onClick={() => {
-                    const c = customers.find(x => x.id === h.customerId || x.name.toLowerCase() === h.customerName.toLowerCase());
-                    if (c) setSelectedCustomer(c);
-                  }} className="text-sm font-bold text-amber-700 hover:underline text-left">{h.customerName}</button>
-                  <p className="text-xs text-gray-500 mt-0.5">{h.notes}</p>
-                  <p className="text-[10px] text-gray-400 mt-1">Via {h.csName}</p>
+          <div className="divide-y divide-amber-50">
+            {csHandoffs.map(h => {
+              const typeLabel: Record<string, string> = { call: 'Phone Call', visit: 'Field Visit', email: 'Email', note: 'Note' };
+              const label = typeLabel[h.activityType ?? 'note'] ?? 'Note';
+              const dateStr = h.date ? new Date(h.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : '';
+              return (
+                <div key={h.id} className="p-4 space-y-2">
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <button onClick={() => {
+                        const c = customers.find(x => x.id === h.customerId || x.name.toLowerCase() === h.customerName.toLowerCase());
+                        if (c) setSelectedCustomer(c);
+                      }} className="text-sm font-bold text-amber-700 hover:underline text-left">{h.customerName}</button>
+                      <div className="flex items-center gap-2 mt-0.5">
+                        <span className="text-[10px] font-bold bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded uppercase tracking-wide">{label}</span>
+                        <span className="text-[10px] text-gray-400">{dateStr}</span>
+                        <span className="text-[10px] text-gray-400">· {h.csName}</span>
+                      </div>
+                    </div>
+                    <button onClick={() => ackCSHandoff(h.id)}
+                      className="flex-shrink-0 text-[10px] font-bold text-gray-500 hover:text-green-600 bg-gray-100 hover:bg-green-50 px-2 py-1 rounded-lg transition-colors whitespace-nowrap">
+                      Mark Done
+                    </button>
+                  </div>
+                  <p className="text-xs text-gray-700 bg-amber-50 rounded-lg px-3 py-2 leading-relaxed">{h.notes}</p>
                 </div>
-                <button onClick={() => ackCSHandoff(h.id)}
-                  className="flex-shrink-0 text-[10px] font-bold text-gray-500 hover:text-green-600 bg-gray-100 hover:bg-green-50 px-2 py-1 rounded-lg transition-colors">
-                  Done
-                </button>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}
@@ -279,23 +290,34 @@ export default function Dashboard() {
             </div>
             <span className="text-[10px] font-bold bg-amber-500 text-white px-2 py-0.5 rounded-full">{csHandoffs.length}</span>
           </div>
-          <div className="p-3 space-y-2">
-            {csHandoffs.map(h => (
-              <div key={h.id} className="flex items-start gap-3 p-3 rounded-xl bg-gray-50">
-                <div className="flex-1 min-w-0">
-                  <button onClick={() => {
-                    const c = customers.find(x => x.id === h.customerId || x.name.toLowerCase() === h.customerName.toLowerCase());
-                    if (c) setSelectedCustomer(c);
-                  }} className="text-sm font-bold text-amber-700 hover:underline text-left">{h.customerName}</button>
-                  <p className="text-xs text-gray-500 mt-0.5">{h.notes}</p>
-                  <p className="text-[10px] text-gray-400 mt-1">Via {h.csName}</p>
+          <div className="divide-y divide-amber-50">
+            {csHandoffs.map(h => {
+              const typeLabel: Record<string, string> = { call: 'Phone Call', visit: 'Field Visit', email: 'Email', note: 'Note' };
+              const label = typeLabel[h.activityType ?? 'note'] ?? 'Note';
+              const dateStr = h.date ? new Date(h.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : '';
+              return (
+                <div key={h.id} className="p-4 space-y-2">
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <button onClick={() => {
+                        const c = customers.find(x => x.id === h.customerId || x.name.toLowerCase() === h.customerName.toLowerCase());
+                        if (c) setSelectedCustomer(c);
+                      }} className="text-sm font-bold text-amber-700 hover:underline text-left">{h.customerName}</button>
+                      <div className="flex items-center gap-2 mt-0.5">
+                        <span className="text-[10px] font-bold bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded uppercase tracking-wide">{label}</span>
+                        <span className="text-[10px] text-gray-400">{dateStr}</span>
+                        <span className="text-[10px] text-gray-400">· {h.csName}</span>
+                      </div>
+                    </div>
+                    <button onClick={() => ackCSHandoff(h.id)}
+                      className="flex-shrink-0 text-[10px] font-bold text-gray-500 hover:text-green-600 bg-gray-100 hover:bg-green-50 px-2 py-1 rounded-lg transition-colors whitespace-nowrap">
+                      Mark Done
+                    </button>
+                  </div>
+                  <p className="text-xs text-gray-700 bg-amber-50 rounded-lg px-3 py-2 leading-relaxed">{h.notes}</p>
                 </div>
-                <button onClick={() => ackCSHandoff(h.id)}
-                  className="flex-shrink-0 text-[10px] font-bold text-gray-500 hover:text-green-600 bg-gray-100 hover:bg-green-50 px-2 py-1 rounded-lg transition-colors">
-                  Done
-                </button>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}

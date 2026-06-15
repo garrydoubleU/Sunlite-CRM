@@ -60,6 +60,7 @@ export interface CSHandoff {
   date: string;
   notes: string;
   acknowledged: boolean;
+  activityType?: string;
 }
 
 export interface Assignment {

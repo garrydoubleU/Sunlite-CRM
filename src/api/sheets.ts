@@ -510,6 +510,7 @@ export async function fetchCSHandoffs(repEmail: string): Promise<CSHandoff[]> {
     date: String(r.Date ?? ''),
     notes: String(r.Notes ?? ''),
     acknowledged: String(r.Acknowledged).toLowerCase() === 'true',
+    activityType: String(r.ActivityType ?? 'note'),
   }));
 }
 
