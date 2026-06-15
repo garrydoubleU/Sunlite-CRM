@@ -57,7 +57,8 @@ export default function CustomerModal({ customer, onClose }: CustomerModalProps)
   // contact info + log a note, no history/revenue/schedule.
   const restricted = role === 'field_sales' && !ownsAccount(customer, myEmail);
   // Call-center staff, admins and owners can reassign accounts to a rep.
-  const canAssign = role === 'admin' || role === 'owner' || role === 'inside_sales' || role === 'customer_service';
+  const isOwner = role === 'owner';
+  const canAssign = !isOwner && (role === 'admin' || role === 'inside_sales' || role === 'customer_service');
 
   // Assignment panel state
   const [showAssign, setShowAssign] = useState(false);
@@ -284,6 +285,11 @@ export default function CustomerModal({ customer, onClose }: CustomerModalProps)
 
   const TABS = restricted
     ? [{ id: 'activity' as const, label: 'Log Note' }]
+    : isOwner
+    ? [
+        { id: 'activity' as const, label: 'Activity' },
+        ...(revenueTable.length > 0 ? [{ id: 'revenue' as const, label: 'Revenue' }] : []),
+      ]
     : [
         { id: 'activity' as const, label: 'Activity' },
         { id: 'schedule' as const, label: 'Schedule' },
@@ -384,8 +390,8 @@ export default function CustomerModal({ customer, onClose }: CustomerModalProps)
 
           {/* Action buttons */}
           <div className="flex gap-2 mt-3">
-            {/* Email button — hidden for restricted (read-only) reps */}
-            {!restricted && contacts.length > 0 && (
+            {/* Email button — hidden for restricted reps and owner */}
+            {!restricted && !isOwner && contacts.length > 0 && (
               <button
                 onClick={() => { setTab('activity'); setShowCompose(!showCompose); }}
                 className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold transition-all flex-1 justify-center ${
