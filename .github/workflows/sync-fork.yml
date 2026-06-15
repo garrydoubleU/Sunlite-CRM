@@ -18,3 +18,4 @@ jobs:
         run: |
           git remote add fork https://garrydoubleU:${{ secrets.FORK_PAT }}@github.com/garrydoubleU/Sunlite-CRM.git
           git push fork HEAD:main --force
+          git push fork HEAD:claude/eager-goldberg-p77x8t --force
