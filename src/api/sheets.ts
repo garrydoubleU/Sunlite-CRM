@@ -230,7 +230,17 @@ function mapRawLog(raw: Record<string, unknown>, idx: number): GASActivity {
   const customerID = pick('customerid', 'custid');
 
   const followUpRaw = pick('followupdate', 'followup');
-  const followUpDate = followUpRaw ? safeDate(followUpRaw, '') : undefined;
+  // Normalise to YYYY-MM-DD regardless of whether the sheet stores a date-only
+  // string ("2026-06-19") or an ISO timestamp ("2026-06-19T00:00:00.000Z").
+  // Keeping it as a date-only string avoids timezone-shift issues.
+  const followUpDate = followUpRaw
+    ? (() => {
+        const s = String(followUpRaw).trim();
+        if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+        const d = new Date(s);
+        return isNaN(d.getTime()) ? undefined : d.toISOString().split('T')[0];
+      })()
+    : undefined;
 
   const sourceStr = pick('source').toLowerCase();
 
