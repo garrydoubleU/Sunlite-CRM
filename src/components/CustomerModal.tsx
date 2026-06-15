@@ -105,6 +105,7 @@ export default function CustomerModal({ customer, onClose }: CustomerModalProps)
   const [followUp, setFollowUp] = useState('');
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [notifyRep, setNotifyRep] = useState(false);
 
   // Multi-contact state
   const [contacts, setContacts] = useState<Contact[]>(parseContacts(customer.email ?? ''));
@@ -218,6 +219,7 @@ export default function CustomerModal({ customer, onClose }: CustomerModalProps)
       summary: notes.trim(),
       source: 'manual',
       ...(followUp ? { followUpDate: new Date(followUp).toISOString() } : {}),
+      notifyRep,
     });
     await new Promise(r => setTimeout(r, 600));
     setSaving(false);
@@ -565,6 +567,18 @@ export default function CustomerModal({ customer, onClose }: CustomerModalProps)
                   rows={2}
                   className="w-full bg-gray-50 border border-gray-200 rounded-lg px-2.5 py-2 text-xs text-gray-700 outline-none resize-none focus:border-amber-400 transition-colors"
                 />
+                {(currentUser?.role === 'customer_service' || currentUser?.role === 'inside_sales') &&
+                  customer.assignedRepId && (
+                  <label className="flex items-center gap-2 text-xs text-gray-600 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={notifyRep}
+                      onChange={e => setNotifyRep(e.target.checked)}
+                      className="rounded"
+                    />
+                    <span>Notify assigned rep to follow up</span>
+                  </label>
+                )}
                 {restricted ? (
                   <div className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-lg px-2.5 py-1.5">
                     <FileText size={11} className="text-gray-400" />

@@ -48,6 +48,18 @@ export interface Activity {
   summary: string;
   source?: 'manual' | 'gmail-auto';
   followUpDate?: string;
+  notifyRep?: boolean;
+}
+
+export interface CSHandoff {
+  id: string;
+  customerId: string;
+  customerName: string;
+  repEmail: string;
+  csName: string;
+  date: string;
+  notes: string;
+  acknowledged: boolean;
 }
 
 export interface Assignment {

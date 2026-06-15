@@ -12,7 +12,7 @@ import OwnerDashboard from './OwnerDashboard';
 import type { Customer } from '../types';
 
 export default function Dashboard() {
-  const { customers, activities } = useCustomerStore();
+  const { customers, activities, csHandoffs, ackCSHandoff } = useCustomerStore();
   const { currentUser } = useAuthStore();
   const role = currentUser?.role ?? 'field_sales';
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
@@ -236,6 +236,36 @@ export default function Dashboard() {
                 </button>
               );
             })}
+          </div>
+        </div>
+      )}
+
+      {csHandoffs.length > 0 && (
+        <div className="bg-white rounded-2xl border border-amber-200 shadow-sm overflow-hidden">
+          <div className="px-5 py-3 bg-amber-50 border-b border-amber-100 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Phone size={14} className="text-amber-600" />
+              <p className="text-xs font-bold text-amber-700 uppercase tracking-wider">CS Flagged — Needs Your Follow-up</p>
+            </div>
+            <span className="text-[10px] font-bold bg-amber-500 text-white px-2 py-0.5 rounded-full">{csHandoffs.length}</span>
+          </div>
+          <div className="p-3 space-y-2">
+            {csHandoffs.map(h => (
+              <div key={h.id} className="flex items-start gap-3 p-3 rounded-xl bg-gray-50">
+                <div className="flex-1 min-w-0">
+                  <button onClick={() => {
+                    const c = customers.find(x => x.id === h.customerId || x.name.toLowerCase() === h.customerName.toLowerCase());
+                    if (c) setSelectedCustomer(c);
+                  }} className="text-sm font-bold text-amber-700 hover:underline text-left">{h.customerName}</button>
+                  <p className="text-xs text-gray-500 mt-0.5">{h.notes}</p>
+                  <p className="text-[10px] text-gray-400 mt-1">Via {h.csName}</p>
+                </div>
+                <button onClick={() => ackCSHandoff(h.id)}
+                  className="flex-shrink-0 text-[10px] font-bold text-gray-500 hover:text-green-600 bg-gray-100 hover:bg-green-50 px-2 py-1 rounded-lg transition-colors">
+                  Done
+                </button>
+              </div>
+            ))}
           </div>
         </div>
       )}

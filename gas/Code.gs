@@ -176,6 +176,64 @@ function doGet(e) {
           break;
         }
       }
+
+      // C. If notifyRep=true, email the assigned rep and write to CSHandoffs sheet
+      const notifyRep = (e.parameter.notifyRep || "").toLowerCase() === "true";
+      if (notifyRep) {
+        // Find the assigned rep email from the Customers sheet
+        const assignedRepIdx = custHeaders.findIndex(h =>
+          h === "salesrepemail" || h === "salesrep" || h === "remail" || h.includes("salesrep")
+        );
+        const repNameColIdx = custHeaders.findIndex(h =>
+          h === "salespersonname" || h === "repname" || h.includes("salesperson")
+        );
+        let repEmail = "";
+        let repDisplayName = "";
+        for (let i = 1; i < custData.length; i++) {
+          const rowId = custData[i][idIdx]?.toString().trim();
+          const rowName = custData[i][nameIdx]?.toString().trim().toLowerCase();
+          const isMatch = (customerID && rowId === customerID.trim()) ||
+                          (customerName && rowName === customerName.toLowerCase().trim());
+          if (isMatch) {
+            repEmail = assignedRepIdx !== -1 ? String(custData[i][assignedRepIdx] || "").trim() : "";
+            repDisplayName = repNameColIdx !== -1 ? String(custData[i][repNameColIdx] || "") : repEmail;
+            break;
+          }
+        }
+        if (repEmail) {
+          const csRepName = repName || userEmail;
+          const emailBody = [
+            "Hi " + repDisplayName + ",",
+            "",
+            "Customer service spoke with " + customerName + " and wanted to flag it for you:",
+            "",
+            notes,
+            "",
+            "Please follow up with them when you get a chance.",
+            "",
+            "— " + csRepName
+          ].join("\n");
+          try {
+            MailApp.sendEmail(repEmail, "CS Note — " + customerName + " needs your follow-up", emailBody);
+          } catch(mailErr) {
+            Logger.log("Rep email failed: " + mailErr.toString());
+          }
+          // Write to CSHandoffs sheet
+          const handoffSheet = getOrCreateSheet(ss, "CSHandoffs",
+            ["ID", "CustomerID", "CustomerName", "RepEmail", "CSName", "Date", "Notes", "Acknowledged"]);
+          handoffSheet.appendRow([
+            Utilities.getUuid(),
+            customerID || customerName,
+            customerName,
+            repEmail.toLowerCase(),
+            csRepName,
+            new Date(),
+            notes,
+            "false"
+          ]);
+        }
+      }
+
       return createJsonResponse({ status: "Success" });
     }
 
@@ -415,6 +473,41 @@ function doGet(e) {
       }
 
       return createJsonResponse({ status: "ok" });
+    }
+
+    // ── CS HANDOFFS
+    if (action === "getCSHandoffs") {
+      const repEmail = (e.parameter.repEmail || userEmail || "").toLowerCase().trim();
+      const sheet = ss.getSheetByName("CSHandoffs");
+      if (!sheet) return createJsonResponse([]);
+      const data = sheet.getDataRange().getValues();
+      const headers = data[0].map(h => h.toString().replace(/\s+/g, ''));
+      const out = [];
+      for (let i = 1; i < data.length; i++) {
+        const obj = rowToObj(headers, data[i]);
+        if (String(obj.RepEmail || "").toLowerCase().trim() === repEmail &&
+            String(obj.Acknowledged).toLowerCase() !== "true") {
+          out.push(obj);
+        }
+      }
+      return createJsonResponse(out);
+    }
+
+    if (action === "acknowledgeCSHandoff") {
+      const id = e.parameter.id || "";
+      const sheet = ss.getSheetByName("CSHandoffs");
+      if (!sheet) return createJsonResponse({ error: "No CSHandoffs sheet" });
+      const data = sheet.getDataRange().getValues();
+      const headers = data[0].map(h => h.toString().replace(/\s+/g, ''));
+      const idIdx2 = headers.indexOf("ID");
+      for (let i = 1; i < data.length; i++) {
+        if (idIdx2 >= 0 && String(data[i][idIdx2]) === id) {
+          const ackIdx = headers.indexOf("Acknowledged");
+          if (ackIdx >= 0) sheet.getRange(i + 1, ackIdx + 1).setValue("true");
+          return createJsonResponse({ status: "ok" });
+        }
+      }
+      return createJsonResponse({ error: "Not found" });
     }
 
     return createJsonResponse({ error: "Action '" + action + "' not handled." });

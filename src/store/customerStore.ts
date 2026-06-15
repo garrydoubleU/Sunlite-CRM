@@ -1,11 +1,12 @@
 import { create } from 'zustand';
-import type { Customer, Activity, Assignment, AccessRequest } from '../types';
+import type { Customer, Activity, Assignment, AccessRequest, CSHandoff } from '../types';
 import { CUSTOMERS, ACTIVITIES } from '../api/mockData';
 import {
   fetchCustomers, fetchAllCustomers, fetchActivities, saveActivity as gasSave,
   deleteActivity as gasDelete, isGASConfigured, triggerEmailSync, fetchUsers,
   assignCustomer as gasAssign, fetchAssignments, acknowledgeAssignment as gasAck,
   requestAccess as gasRequestAccess, fetchAccessRequests, resolveAccessRequest as gasResolve,
+  fetchCSHandoffs, acknowledgeCSHandoff,
   type GASCustomer, type GASActivity,
 } from '../api/sheets';
 import { useAuthStore } from './authStore';
@@ -85,6 +86,10 @@ interface CustomerState {
   requestAccess: (customer: Customer) => Promise<void>;
   loadAccessRequests: () => Promise<void>;
   resolveAccessRequest: (id: string, grant: boolean) => Promise<void>;
+  // CS Handoffs
+  csHandoffs: CSHandoff[];
+  loadCSHandoffs: () => Promise<void>;
+  ackCSHandoff: (id: string) => void;
 }
 
 export const useCustomerStore = create<CustomerState>((set, get) => ({
@@ -94,6 +99,7 @@ export const useCustomerStore = create<CustomerState>((set, get) => ({
   activities: ACTIVITIES,
   assignments: [],
   accessRequests: [],
+  csHandoffs: [],
   emailToName: {},
   lastSync: null,
   isSyncing: false,
@@ -155,6 +161,9 @@ export const useCustomerStore = create<CustomerState>((set, get) => ({
           .catch(() => {});
         fetchAssignments(email)
           .then(assignments => set({ assignments }))
+          .catch(() => {});
+        fetchCSHandoffs(email)
+          .then(csHandoffs => set({ csHandoffs }))
           .catch(() => {});
       }
       // Admin: load pending access requests
@@ -311,5 +320,18 @@ export const useCustomerStore = create<CustomerState>((set, get) => ({
     if (isGASConfigured()) {
       await gasResolve(id, grant).catch(err => console.error('[GAS] resolveAccessRequest failed:', err));
     }
+  },
+
+  loadCSHandoffs: async () => {
+    const { currentUser } = useAuthStore.getState();
+    const email = currentUser?.email ?? '';
+    if (!isGASConfigured() || !email) return;
+    const handoffs = await fetchCSHandoffs(email).catch(() => []);
+    set({ csHandoffs: handoffs });
+  },
+
+  ackCSHandoff: (id: string) => {
+    set(state => ({ csHandoffs: state.csHandoffs.filter(h => h.id !== id) }));
+    if (isGASConfigured()) acknowledgeCSHandoff(id).catch(() => {});
   },
 }));

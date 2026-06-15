@@ -200,6 +200,7 @@ export interface GASActivity {
   summary: string;
   source?: 'manual' | 'gmail-auto';
   followUpDate?: string;
+  notifyRep?: boolean;
 }
 
 // Log rows can come back from different GAS schemas (the clean Code.gs schema
@@ -309,6 +310,7 @@ export async function saveActivity(
     Reason: '',
     NewEmail: '',
     Priority: '',
+    notifyRep: (activity.notifyRep ?? false).toString(),
   });
 }
 
@@ -396,7 +398,7 @@ export async function addContactToSheet(params: {
 
 // ── Account assignment & access requests ──────────────────────
 
-import type { Assignment, AccessRequest } from '../types';
+import type { Assignment, AccessRequest, CSHandoff } from '../types';
 
 // Reassign an account to another rep. Updates the Customers sheet and
 // records an assignment so the new owner sees an alert.
@@ -492,6 +494,27 @@ export async function fetchAccessRequests(): Promise<AccessRequest[]> {
 // Admin grants a pending request: assigns the account and marks it granted.
 export async function resolveAccessRequest(id: string, grant: boolean): Promise<void> {
   await gasPost({ action: 'resolveAccessRequest', id, grant: grant ? 'true' : 'false' });
+}
+
+// ── CS Handoffs ───────────────────────────────────────────────
+
+export async function fetchCSHandoffs(repEmail: string): Promise<CSHandoff[]> {
+  const raw = await gasGet<Record<string, unknown>[]>('getCSHandoffs', { repEmail });
+  if (!Array.isArray(raw)) return [];
+  return raw.map(r => ({
+    id: String(r.ID ?? ''),
+    customerId: String(r.CustomerID ?? ''),
+    customerName: String(r.CustomerName ?? ''),
+    repEmail: String(r.RepEmail ?? '').toLowerCase(),
+    csName: String(r.CSName ?? ''),
+    date: String(r.Date ?? ''),
+    notes: String(r.Notes ?? ''),
+    acknowledged: String(r.Acknowledged).toLowerCase() === 'true',
+  }));
+}
+
+export async function acknowledgeCSHandoff(id: string): Promise<void> {
+  await gasPost({ action: 'acknowledgeCSHandoff', id });
 }
 
 // ── Email sync ────────────────────────────────────────────────
