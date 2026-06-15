@@ -97,7 +97,7 @@ function CallerCard({
 
 export default function CallerDashboard() {
   const { customers, activities } = useCustomerStore();
-  useAuthStore(); // keep store subscription
+  const { currentUser } = useAuthStore();
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [expandedPriority, setExpandedPriority] = useState<number | null>(1);
   const now = new Date();
@@ -151,10 +151,27 @@ export default function CallerDashboard() {
 
   const totalQueue = Object.values(priorityGroups).reduce((s, g) => s + g.length, 0);
 
+  // ── This week stats ────────────────────────────────────────────
+  const weekStart = new Date(now);
+  weekStart.setHours(0, 0, 0, 0);
+  weekStart.setDate(now.getDate() - (now.getDay() === 0 ? 6 : now.getDay() - 1));
+  const myName = currentUser?.name ?? '';
+  const thisWeek = activities.filter(a => new Date(a.date) >= weekStart && (!myName || a.repName === myName));
+  const weekCalls = thisWeek.filter(a => a.type === 'call').length;
+  const weekEmails = thisWeek.filter(a => a.type === 'email').length;
+  const weekNotes = thisWeek.filter(a => a.type === 'note').length;
+  const weekTotal = thisWeek.length;
+
   return (
     <div className="space-y-4 max-w-2xl mx-auto">
 
       <AssignmentAlert />
+
+      {/* Greeting */}
+      <div>
+        <p className="text-lg font-bold text-gray-900">Hey {currentUser?.name?.split(' ')[0]} 👋</p>
+        <p className="text-xs text-gray-400">{now.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}</p>
+      </div>
 
       {/* Header stats */}
       <div className="grid grid-cols-3 gap-3">
@@ -264,6 +281,29 @@ export default function CallerDashboard() {
             <p className="text-xs text-gray-400 mt-1">No contacts overdue — great work!</p>
           </div>
         )}
+      </div>
+
+      {/* This week stats */}
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+        <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Your week so far</p>
+        <div className="grid grid-cols-4 gap-3 text-center">
+          <div>
+            <p className="text-2xl font-black text-gray-900">{weekTotal}</p>
+            <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mt-0.5">Total</p>
+          </div>
+          <div>
+            <p className="text-2xl font-black text-blue-600">{weekCalls}</p>
+            <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mt-0.5">Calls</p>
+          </div>
+          <div>
+            <p className="text-2xl font-black text-purple-600">{weekEmails}</p>
+            <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mt-0.5">Emails</p>
+          </div>
+          <div>
+            <p className="text-2xl font-black text-gray-500">{weekNotes}</p>
+            <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mt-0.5">Notes</p>
+          </div>
+        </div>
       </div>
 
       {selectedCustomer && (

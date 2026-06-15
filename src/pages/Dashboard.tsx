@@ -1,8 +1,8 @@
 import { useState } from 'react';
-import { Clock } from 'lucide-react';
+import { Clock, ChevronDown, ChevronUp, Phone, Mail, TrendingUp } from 'lucide-react';
 import { useCustomerStore } from '../store/customerStore';
 import { useAuthStore } from '../store/authStore';
-import { calculateNextVisit, getDaysUntil, getDueDateColor, safeDaysSince, safeFormat } from '../utils/scheduler';
+import { calculateNextVisit, getDaysUntil, safeFormat, safeDaysSince } from '../utils/scheduler';
 import RoutePlanner from '../components/RoutePlanner';
 import CustomerModal from '../components/CustomerModal';
 import AssignmentAlert from '../components/AssignmentAlert';
@@ -16,173 +16,231 @@ export default function Dashboard() {
   const { currentUser } = useAuthStore();
   const role = currentUser?.role ?? 'field_sales';
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
+  const [visitsOpen, setVisitsOpen] = useState(false);
+  const [checkInsOpen, setCheckInsOpen] = useState(false);
 
-  function openCustomer(nameOrId: string) {
-    const found = customers.find(c =>
-      c.id === nameOrId || c.name.toLowerCase() === nameOrId.toLowerCase()
-    );
-    if (found) setSelectedCustomer(found);
-  }
   if (role === 'owner') return <OwnerDashboard />;
   if (role === 'admin') return <AdminDashboard />;
   if (role === 'inside_sales' || role === 'customer_service') return <CallerDashboard />;
 
-  // ── Shared stats ──────────────────────────────────────────────
-  const untouchedCustomers = customers
-    .filter(c => c.activeStatus && safeDaysSince(c.lastContactDate) >= 30)
+  const now = new Date();
+  const today = now.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+
+  // ── Visits due (field accounts past their schedule) ────────────
+  const visitsDue = customers
+    .filter(c => c.activeStatus)
+    .map(c => ({ c, next: calculateNextVisit(c.lastContactDate, c.visitFrequency, c.dayOfWeek) }))
+    .filter(({ next }) => getDaysUntil(next) <= 0)
+    .sort((a, b) => a.next.getTime() - b.next.getTime())
+    .map(({ c }) => c);
+
+  // ── Check-in needed: no visit required, but no contact in 14+ days ──
+  const visitDueIds = new Set(visitsDue.map(c => c.id));
+  const checkInsNeeded = customers
+    .filter(c => c.activeStatus && !visitDueIds.has(c.id) && safeDaysSince(c.lastContactDate) >= 14)
     .sort((a, b) => safeDaysSince(b.lastContactDate) - safeDaysSince(a.lastContactDate));
 
-  const recentActivities = [...activities]
-    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-    .slice(0, 8);
+  // ── This week stats ────────────────────────────────────────────
+  const weekStart = new Date(now);
+  weekStart.setHours(0, 0, 0, 0);
+  weekStart.setDate(now.getDate() - (now.getDay() === 0 ? 6 : now.getDay() - 1));
+  const thisWeekActivities = activities.filter(a => new Date(a.date) >= weekStart);
+  const weekCalls = thisWeekActivities.filter(a => a.type === 'call').length;
+  const weekVisits = thisWeekActivities.filter(a => a.type === 'visit').length;
+  const weekEmails = thisWeekActivities.filter(a => a.type === 'email').length;
+  const weekNotes = thisWeekActivities.filter(a => a.type === 'note').length;
 
-  // Activities that have a future follow-up date set
-  const now = new Date();
+  // ── Coming up soon (next 7–14 days, not already due) ──────────
+  const comingSoon = customers
+    .filter(c => c.activeStatus && !visitDueIds.has(c.id))
+    .map(c => ({ c, next: calculateNextVisit(c.lastContactDate, c.visitFrequency, c.dayOfWeek) }))
+    .filter(({ next }) => { const d = getDaysUntil(next); return d > 0 && d <= 14; })
+    .sort((a, b) => a.next.getTime() - b.next.getTime())
+    .slice(0, 6);
+
+  // ── Upcoming follow-ups ────────────────────────────────────────
   const upcomingFollowUps = activities
     .filter(a => a.followUpDate && new Date(a.followUpDate) >= now)
     .sort((a, b) => new Date(a.followUpDate!).getTime() - new Date(b.followUpDate!).getTime())
-    .slice(0, 10);
-
-  // ── Field / Admin stats ───────────────────────────────────────
-  const followUpsToday = customers.filter(c => {
-    if (!c.activeStatus) return false;
-    return getDaysUntil(calculateNextVisit(c.lastContactDate, c.visitFrequency, c.dayOfWeek)) <= 0;
-  });
-
-  const routeEntries = customers
-    .filter(c => c.activeStatus)
-    .map(c => ({ customer: c, nextVisit: calculateNextVisit(c.lastContactDate, c.visitFrequency, c.dayOfWeek) }))
-    .filter(r => getDaysUntil(r.nextVisit) >= -1 && getDaysUntil(r.nextVisit) <= 14)
-    .sort((a, b) => a.nextVisit.getTime() - b.nextVisit.getTime())
     .slice(0, 6);
 
-
-  const today = new Date();
-  const dateLabel = today.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
-
-  // ── Render: Field Sales / Admin ───────────────────────────────
   return (
-    <div className="space-y-6">
+    <div className="space-y-5 max-w-2xl mx-auto">
       <AssignmentAlert />
 
-      {/* Clean header strip */}
+      {/* Greeting */}
       <div className="flex items-baseline justify-between">
         <div>
           <p className="text-xl font-bold text-gray-900">Good morning, {currentUser?.name?.split(' ')[0]}</p>
-          <p className="text-sm text-gray-400 mt-0.5">{dateLabel}</p>
-        </div>
-        <div className="flex gap-6 text-right">
-          <div>
-            <p className="text-2xl font-black text-gray-900">{followUpsToday.length}</p>
-            <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest">Due today</p>
-          </div>
-          <div>
-            <p className="text-2xl font-black text-gray-900">{untouchedCustomers.length}</p>
-            <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest">Overdue</p>
-          </div>
+          <p className="text-sm text-gray-400 mt-0.5">{today}</p>
         </div>
       </div>
 
-      <RoutePlanner />
+      {/* ── Key action cards ───────────────────────────────── */}
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
-          <h3 className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-4">Upcoming Routed Accounts</h3>
+      {/* Visits due */}
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+        <button
+          onClick={() => setVisitsOpen(v => !v)}
+          className="w-full flex items-center justify-between px-5 py-4 hover:bg-gray-50 transition-colors"
+        >
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-red-50 flex items-center justify-center">
+              <TrendingUp size={18} className="text-red-500" />
+            </div>
+            <div className="text-left">
+              <p className="text-2xl font-black text-gray-900 leading-none">{visitsDue.length}</p>
+              <p className="text-xs font-semibold text-gray-500 mt-0.5">Accounts need a visit</p>
+            </div>
+          </div>
+          {visitsDue.length > 0 && (
+            visitsOpen ? <ChevronUp size={16} className="text-gray-400" /> : <ChevronDown size={16} className="text-gray-400" />
+          )}
+        </button>
+        {visitsOpen && visitsDue.length > 0 && (
+          <div className="border-t border-gray-50 px-4 pb-3 pt-2 space-y-2">
+            {visitsDue.map(c => (
+              <button key={c.id} onClick={() => setSelectedCustomer(c)}
+                className="w-full flex items-center gap-3 p-3 rounded-xl bg-gray-50 hover:bg-red-50 transition-colors text-left">
+                <div className="w-7 h-7 rounded-lg bg-red-100 flex items-center justify-center flex-shrink-0">
+                  <span className="text-[10px] font-black text-red-600">T{c.priorityTier}</span>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-gray-900 truncate">{c.name}</p>
+                  <p className="text-xs text-gray-400">{safeDaysSince(c.lastContactDate)}d since last contact</p>
+                </div>
+                <span className="text-[10px] font-bold text-red-600 bg-red-100 px-2 py-0.5 rounded-full flex-shrink-0">OVERDUE</span>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Check-ins needed */}
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+        <button
+          onClick={() => setCheckInsOpen(v => !v)}
+          className="w-full flex items-center justify-between px-5 py-4 hover:bg-gray-50 transition-colors"
+        >
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-amber-50 flex items-center justify-center">
+              <Phone size={18} className="text-amber-500" />
+            </div>
+            <div className="text-left">
+              <p className="text-2xl font-black text-gray-900 leading-none">{checkInsNeeded.length}</p>
+              <p className="text-xs font-semibold text-gray-500 mt-0.5">Need a call or email check-in</p>
+            </div>
+          </div>
+          {checkInsNeeded.length > 0 && (
+            checkInsOpen ? <ChevronUp size={16} className="text-gray-400" /> : <ChevronDown size={16} className="text-gray-400" />
+          )}
+        </button>
+        {checkInsOpen && checkInsNeeded.length > 0 && (
+          <div className="border-t border-gray-50 px-4 pb-3 pt-2 space-y-2">
+            {checkInsNeeded.map(c => (
+              <button key={c.id} onClick={() => setSelectedCustomer(c)}
+                className="w-full flex items-center gap-3 p-3 rounded-xl bg-gray-50 hover:bg-amber-50 transition-colors text-left">
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-gray-900 truncate">{c.name}</p>
+                  <p className="text-xs text-gray-400">{safeDaysSince(c.lastContactDate)}d since last contact</p>
+                </div>
+                <div className="flex items-center gap-1 flex-shrink-0">
+                  {c.phone && (
+                    <a href={`tel:${c.phone}`} onClick={e => e.stopPropagation()}
+                      className="w-7 h-7 rounded-lg bg-green-100 flex items-center justify-center text-green-600 hover:bg-green-200 transition-colors">
+                      <Phone size={12} />
+                    </a>
+                  )}
+                  {c.email && (
+                    <a href={`mailto:${c.email}`} onClick={e => e.stopPropagation()}
+                      className="w-7 h-7 rounded-lg bg-blue-100 flex items-center justify-center text-blue-600 hover:bg-blue-200 transition-colors">
+                      <Mail size={12} />
+                    </a>
+                  )}
+                </div>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* ── This week stats ────────────────────────────────── */}
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+        <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Your week so far</p>
+        <div className="grid grid-cols-4 gap-3">
+          {[
+            { label: 'Visits', count: weekVisits, color: 'text-green-600' },
+            { label: 'Calls', count: weekCalls, color: 'text-blue-600' },
+            { label: 'Emails', count: weekEmails, color: 'text-purple-600' },
+            { label: 'Notes', count: weekNotes, color: 'text-gray-500' },
+          ].map(({ label, count, color }) => (
+            <div key={label} className="text-center">
+              <p className={`text-2xl font-black ${color}`}>{count}</p>
+              <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mt-0.5">{label}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* ── Coming up / if you have extra time ─────────────── */}
+      {comingSoon.length > 0 && (
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+          <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Coming up soon — get ahead</p>
           <div className="space-y-2">
-            {routeEntries.map(({ customer: c, nextVisit }) => {
-              const days = getDaysUntil(nextVisit);
-              const colorClass = getDueDateColor(nextVisit);
-              const label = days <= 0 ? 'TODAY' : days === 1 ? 'TOMORROW' : safeFormat(nextVisit.toISOString(), 'EEE, MMM d');
+            {comingSoon.map(({ c, next }) => {
+              const days = getDaysUntil(next);
               return (
-                <div key={c.id} className="flex items-center gap-3 p-3 rounded-xl bg-gray-50 hover:bg-amber-50 transition-colors cursor-pointer" onClick={() => setSelectedCustomer(c)}>
+                <button key={c.id} onClick={() => setSelectedCustomer(c)}
+                  className="w-full flex items-center gap-3 p-3 rounded-xl bg-gray-50 hover:bg-amber-50 transition-colors text-left">
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="font-bold text-xs text-amber-600 hover:underline">{c.name}</span>
-                      <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full uppercase ${
-                        c.visitFrequency === 'weekly' ? 'bg-blue-100 text-blue-600' :
-                        c.visitFrequency === 'biweekly' ? 'bg-purple-100 text-purple-600' :
-                        'bg-green-100 text-green-600'
-                      }`}>{c.visitFrequency}</span>
-                    </div>
-                    <p className="text-[10px] text-gray-400 mt-0.5 font-mono">{c.id}</p>
+                    <p className="text-sm font-semibold text-gray-900 truncate">{c.name}</p>
+                    <p className="text-xs text-gray-400">{safeFormat(next.toISOString(), 'EEE, MMM d')}</p>
                   </div>
-                  <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full whitespace-nowrap ${colorClass}`}>{label}</span>
-                </div>
-              );
-            })}
-            {routeEntries.length === 0 && (
-              <p className="text-xs text-gray-400 text-center py-6">No visits scheduled in the next 14 days.</p>
-            )}
-          </div>
-        </div>
-
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
-          <h3 className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-4">Recent Activity</h3>
-          <div className="space-y-3">
-            {recentActivities.map(act => {
-              const customer = customers.find(c =>
-                c.id === act.customerId ||
-                c.name.toLowerCase() === act.customerId.toLowerCase()
-              );
-              const colors: Record<string, string> = {
-                call: 'bg-blue-100 text-blue-600',
-                visit: 'bg-green-100 text-green-600',
-                note: 'bg-gray-100 text-gray-600',
-                email: 'bg-red-100 text-red-500',
-              };
-              return (
-                <div key={act.id} className="flex gap-3">
-                  <span className={`text-[9px] font-bold px-2 py-1 rounded-full uppercase self-start flex-shrink-0 ${colors[act.type]}`}>
-                    {act.type}
+                  <span className="text-[10px] font-bold text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full flex-shrink-0">
+                    in {days}d
                   </span>
-                  <div className="flex-1 min-w-0">
-                    <button onClick={() => openCustomer(act.customerId)} className="text-xs font-semibold text-amber-600 hover:underline text-left truncate block w-full">
-                      {customer?.name ?? act.customerId}
-                    </button>
-                    <p className="text-xs text-gray-500 leading-relaxed truncate">{act.summary}</p>
-                    <p className="text-[10px] text-gray-400 mt-0.5">{act.repName} · {safeFormat(act.date, 'MMM d')}</p>
-                  </div>
-                </div>
+                </button>
               );
             })}
           </div>
         </div>
-      </div>
+      )}
 
-      {/* Upcoming follow-ups */}
+      {/* ── Upcoming follow-ups ─────────────────────────────── */}
       {upcomingFollowUps.length > 0 && (
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
-          <div className="flex items-center gap-2 mb-4">
-            <Clock size={15} className="text-amber-500" />
-            <h3 className="text-xs font-black text-gray-800 uppercase tracking-wider">Upcoming Follow-ups</h3>
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+          <div className="flex items-center gap-2 mb-3">
+            <Clock size={14} className="text-amber-500" />
+            <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Upcoming Follow-ups</p>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+          <div className="space-y-2">
             {upcomingFollowUps.map(act => {
               const customer = customers.find(c =>
                 c.id === act.customerId || c.name.toLowerCase() === act.customerId.toLowerCase()
               );
               const daysUntil = Math.ceil((new Date(act.followUpDate!).getTime() - now.getTime()) / 86400000);
               return (
-                <div key={act.id} className="flex items-center gap-3 p-3 rounded-xl bg-amber-50 border border-amber-100">
+                <button key={act.id} onClick={() => customer && setSelectedCustomer(customer)}
+                  className="w-full flex items-center gap-3 p-3 rounded-xl bg-amber-50 border border-amber-100 hover:bg-amber-100 transition-colors text-left">
                   <div className="flex-1 min-w-0">
-                    <button onClick={() => openCustomer(act.customerId)} className="text-xs font-bold text-amber-700 hover:underline text-left truncate block">
-                      {customer?.name ?? act.customerId}
-                    </button>
-                    <p className="text-[10px] text-gray-500 truncate">{act.summary}</p>
+                    <p className="text-sm font-semibold text-amber-800 truncate">{customer?.name ?? act.customerId}</p>
+                    <p className="text-xs text-gray-500 truncate">{act.summary}</p>
                   </div>
-                  <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full flex-shrink-0 ${
+                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full flex-shrink-0 ${
                     daysUntil === 0 ? 'bg-red-100 text-red-600' :
                     daysUntil <= 2 ? 'bg-amber-100 text-amber-700' :
                     'bg-blue-100 text-blue-600'
                   }`}>
                     {daysUntil === 0 ? 'TODAY' : daysUntil === 1 ? 'TOMORROW' : `IN ${daysUntil}D`}
                   </span>
-                </div>
+                </button>
               );
             })}
           </div>
         </div>
       )}
+
+      <RoutePlanner />
 
       {selectedCustomer && (
         <CustomerModal customer={selectedCustomer} onClose={() => setSelectedCustomer(null)} />
