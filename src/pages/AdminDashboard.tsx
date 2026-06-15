@@ -138,6 +138,7 @@ export default function AdminDashboard() {
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-semibold text-gray-800 truncate">
                     {req.requesterName || req.requesterEmail} wants access to <span className="font-black">{req.customerName}</span>
+                    {req.customerId && <span className="text-gray-400 font-mono font-normal text-xs"> · {req.customerId}</span>}
                   </p>
                   <p className="text-[10px] text-gray-400 truncate">{req.requesterEmail} · {safeFormat(req.date, 'MMM d, h:mm a')}</p>
                 </div>
