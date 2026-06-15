@@ -1,8 +1,9 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useCustomerStore } from '../store/customerStore';
 import type { Activity } from '../types';
 
 type ActivityType = 'call' | 'visit' | 'email' | 'note';
+type Period = 'lastWeek' | 'thisMonth' | 'ytd';
 
 interface RepStats {
   name: string;
@@ -13,78 +14,92 @@ interface RepStats {
   total: number;
 }
 
-function getLastWeekRange(): { start: Date; end: Date; label: string } {
-  const today = new Date();
-  // Day of week: 0=Sun, 1=Mon, ..., 6=Sat
-  const dayOfWeek = today.getDay();
-  // Days since last Monday
-  const daysSinceThisMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
-  // This Monday at midnight
-  const thisMonday = new Date(today);
-  thisMonday.setHours(0, 0, 0, 0);
-  thisMonday.setDate(today.getDate() - daysSinceThisMonday);
-  // Last Monday = 7 days before this Monday
-  const lastMonday = new Date(thisMonday);
-  lastMonday.setDate(thisMonday.getDate() - 7);
-  // Last Sunday = 1 day before this Monday
-  const lastSunday = new Date(thisMonday);
-  lastSunday.setDate(thisMonday.getDate() - 1);
-  lastSunday.setHours(23, 59, 59, 999);
-
+function getRange(period: Period): { start: Date; end: Date; label: string } {
+  const now = new Date();
   const fmt = (d: Date) =>
-    d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
-  const label = `Week of ${fmt(lastMonday)} – ${fmt(lastSunday)}`;
+    d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 
-  return { start: lastMonday, end: lastSunday, label };
+  if (period === 'lastWeek') {
+    const dow = now.getDay();
+    const daysSinceMonday = dow === 0 ? 6 : dow - 1;
+    const thisMonday = new Date(now);
+    thisMonday.setHours(0, 0, 0, 0);
+    thisMonday.setDate(now.getDate() - daysSinceMonday);
+    const lastMonday = new Date(thisMonday);
+    lastMonday.setDate(thisMonday.getDate() - 7);
+    const lastSunday = new Date(thisMonday);
+    lastSunday.setDate(thisMonday.getDate() - 1);
+    lastSunday.setHours(23, 59, 59, 999);
+    const fmtShort = (d: Date) =>
+      d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+    return { start: lastMonday, end: lastSunday, label: `Week of ${fmtShort(lastMonday)} – ${fmtShort(lastSunday)}` };
+  }
+
+  if (period === 'thisMonth') {
+    const start = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
+    const end = new Date(now);
+    end.setHours(23, 59, 59, 999);
+    return { start, end, label: `${now.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })} (MTD)` };
+  }
+
+  // ytd
+  const start = new Date(now.getFullYear(), 0, 1, 0, 0, 0, 0);
+  const end = new Date(now);
+  end.setHours(23, 59, 59, 999);
+  return { start, end, label: `Jan 1 – ${fmt(end)} (YTD)` };
 }
+
+function buildStats(activities: Activity[], start: Date, end: Date) {
+  const repMap: Record<string, RepStats> = {};
+  const typeTotals = { call: 0, visit: 0, email: 0, note: 0, total: 0 };
+
+  for (const a of activities) {
+    const d = new Date(a.date);
+    if (d < start || d > end) continue;
+    const name = a.repName || 'Unknown';
+    if (!repMap[name]) repMap[name] = { name, call: 0, visit: 0, email: 0, note: 0, total: 0 };
+    const t = a.type as ActivityType;
+    if (t in repMap[name]) (repMap[name][t] as number) += 1;
+    repMap[name].total += 1;
+    if (t in typeTotals) (typeTotals[t] as number) += 1;
+    typeTotals.total += 1;
+  }
+
+  return { repMap, typeTotals };
+}
+
+const PERIOD_LABELS: Record<Period, string> = {
+  lastWeek: 'Last Week',
+  thisMonth: 'This Month',
+  ytd: 'YTD',
+};
 
 export default function ReportsPage() {
   const { activities } = useCustomerStore();
+  const [period, setPeriod] = useState<Period>('lastWeek');
 
-  const { start, end, label } = useMemo(() => getLastWeekRange(), []);
-
-  const weekActivities = useMemo(() =>
-    activities.filter((a: Activity) => {
-      const d = new Date(a.date);
-      return d >= start && d <= end;
-    }),
-    [activities, start, end]
-  );
-
-  const { repMap, typeTotals } = useMemo(() => {
-    const repMap: Record<string, RepStats> = {};
-    const typeTotals = { call: 0, visit: 0, email: 0, note: 0, total: 0 };
-
-    for (const a of weekActivities) {
-      const name = a.repName || 'Unknown';
-      if (!repMap[name]) {
-        repMap[name] = { name, call: 0, visit: 0, email: 0, note: 0, total: 0 };
-      }
-      const t = a.type as ActivityType;
-      if (t in repMap[name]) {
-        (repMap[name][t] as number) += 1;
-      }
-      repMap[name].total += 1;
-      if (t in typeTotals) {
-        (typeTotals[t] as number) += 1;
-      }
-      typeTotals.total += 1;
-    }
-
-    return { repMap, typeTotals };
-  }, [weekActivities]);
-
-  const repRows = useMemo(() =>
-    Object.values(repMap).sort((a, b) => b.total - a.total),
-    [repMap]
-  );
+  const { start, end, label } = useMemo(() => getRange(period), [period]);
+  const { repMap, typeTotals } = useMemo(() => buildStats(activities, start, end), [activities, start, end]);
+  const repRows = useMemo(() => Object.values(repMap).sort((a, b) => b.total - a.total), [repMap]);
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
       {/* Header */}
-      <div>
-        <h1 className="text-2xl font-black text-slate-900">Activity Report</h1>
-        <p className="text-sm text-slate-500 mt-1">{label}</p>
+      <div className="flex items-start justify-between gap-4 flex-wrap">
+        <div>
+          <h1 className="text-2xl font-black text-slate-900">Activity Report</h1>
+          <p className="text-sm text-slate-400 mt-1">{label}</p>
+        </div>
+        <div className="flex gap-1 bg-gray-100 rounded-xl p-1">
+          {(Object.keys(PERIOD_LABELS) as Period[]).map(p => (
+            <button key={p} onClick={() => setPeriod(p)}
+              className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
+                period === p ? 'bg-white shadow-sm text-slate-900' : 'text-slate-500 hover:text-slate-700'
+              }`}>
+              {PERIOD_LABELS[p]}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Summary cards */}
