@@ -1,6 +1,6 @@
 /**
  * GOOGLE APPS SCRIPT — SUNLITE CRM HUB
- * Version 3.2 — Fix CSHandoffs RepEmail storing full comma-list instead of first rep email
+ * Version 3.3 — Fix rep email lookup ignoring spaces in column headers (salesrepemail vs "sales rep email")
  *
  * Handles: login, customers (own + all), logs (read/save/delete), users,
  *          quick links, email send, gmail sync, customer-email update,
@@ -186,12 +186,14 @@ function doGet(e) {
       const notifyRep = (e.parameter.notifyRep || "").toLowerCase() === "true";
       if (notifyRep) {
         // Find the assigned rep email from the Customers sheet
-        const assignedRepIdx = custHeaders.findIndex(h =>
-          h === "salesrepemail" || h === "salesrep" || h === "remail" || h.includes("salesrep")
-        );
-        const repNameColIdx = custHeaders.findIndex(h =>
-          h === "salespersonname" || h === "repname" || h.includes("salesperson")
-        );
+        const assignedRepIdx = custHeaders.findIndex(h => {
+          const ns = h.replace(/\s+/g, '');
+          return ns === "salesrepemail" || ns === "salesrep" || ns === "remail" || ns.includes("salesrep");
+        });
+        const repNameColIdx = custHeaders.findIndex(h => {
+          const ns = h.replace(/\s+/g, '');
+          return ns === "salespersonname" || ns === "repname" || ns.includes("salesperson");
+        });
         let repEmail = "";
         let repDisplayName = "";
         for (let i = 1; i < custData.length; i++) {
