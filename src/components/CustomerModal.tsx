@@ -103,9 +103,9 @@ export default function CustomerModal({ customer, onClose }: CustomerModalProps)
   const [notes, setNotes] = useState('');
   const [logType, setLogType] = useState<ActivityType | ''>('');
   const [followUp, setFollowUp] = useState('');
+  const [notifyRep, setNotifyRep] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
-  const [notifyRep, setNotifyRep] = useState(false);
 
   // Multi-contact state
   const [contacts, setContacts] = useState<Contact[]>(parseContacts(customer.email ?? ''));
@@ -218,8 +218,8 @@ export default function CustomerModal({ customer, onClose }: CustomerModalProps)
       repName: currentUser?.name ?? 'Unknown',
       summary: notes.trim(),
       source: 'manual',
-      ...(followUp ? { followUpDate: new Date(followUp).toISOString() } : {}),
       notifyRep,
+      ...(followUp ? { followUpDate: new Date(followUp).toISOString() } : {}),
     });
     await new Promise(r => setTimeout(r, 600));
     setSaving(false);

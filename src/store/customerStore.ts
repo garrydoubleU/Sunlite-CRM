@@ -63,6 +63,7 @@ interface CustomerState {
   activities: Activity[];
   assignments: Assignment[];
   accessRequests: AccessRequest[];
+  csHandoffs: CSHandoff[];
   // email → display name map built from the Users sheet
   emailToName: Record<string, string>;
   lastSync: Date | null;
@@ -86,8 +87,7 @@ interface CustomerState {
   requestAccess: (customer: Customer) => Promise<void>;
   loadAccessRequests: () => Promise<void>;
   resolveAccessRequest: (id: string, grant: boolean) => Promise<void>;
-  // CS Handoffs
-  csHandoffs: CSHandoff[];
+  // CS Handoff flows
   loadCSHandoffs: () => Promise<void>;
   ackCSHandoff: (id: string) => void;
 }
