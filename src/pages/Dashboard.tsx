@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Clock, ChevronDown, ChevronUp, Phone, Mail, TrendingUp } from 'lucide-react';
+import { Clock, ChevronDown, ChevronUp, Phone, Mail, TrendingUp, CheckSquare } from 'lucide-react';
 import { useCustomerStore } from '../store/customerStore';
 import { useAuthStore } from '../store/authStore';
 import { calculateNextVisit, getDaysUntil, safeFormat, safeDaysSince } from '../utils/scheduler';
@@ -11,13 +11,18 @@ import AdminDashboard from './AdminDashboard';
 import OwnerDashboard from './OwnerDashboard';
 import type { Customer } from '../types';
 
+const TYPE_LABEL: Record<string, string> = { call: 'Phone Call', visit: 'Field Visit', email: 'Email', note: 'Note' };
+
 export default function Dashboard() {
-  const { customers, activities, csHandoffs, ackCSHandoff } = useCustomerStore();
+  const { customers, activities, csHandoffs, ackCSHandoff, addActivity } = useCustomerStore();
   const { currentUser } = useAuthStore();
   const role = currentUser?.role ?? 'field_sales';
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [visitsOpen, setVisitsOpen] = useState(false);
   const [checkInsOpen, setCheckInsOpen] = useState(false);
+  // Per-task completion note state: { [handoffId]: string }
+  const [taskNotes, setTaskNotes] = useState<Record<string, string>>({});
+  const [taskExpanded, setTaskExpanded] = useState<Record<string, boolean>>({});
 
   if (role === 'owner') return <OwnerDashboard />;
   if (role === 'admin') return <AdminDashboard />;
@@ -34,11 +39,17 @@ export default function Dashboard() {
     .sort((a, b) => a.next.getTime() - b.next.getTime())
     .map(({ c }) => c);
 
-  // ── Check-in needed: no visit required, but no contact in 14+ days ──
+  // ── Check-in needed ──
   const visitDueIds = new Set(visitsDue.map(c => c.id));
   const checkInsNeeded = customers
     .filter(c => c.activeStatus && !visitDueIds.has(c.id) && safeDaysSince(c.lastContactDate) >= 14)
     .sort((a, b) => safeDaysSince(b.lastContactDate) - safeDaysSince(a.lastContactDate));
+
+  // ── Today stats ────────────────────────────────────────────────
+  const todayStart = new Date(now); todayStart.setHours(0, 0, 0, 0);
+  const todayActivities = activities.filter(a => new Date(a.date) >= todayStart);
+  const callsToday = todayActivities.filter(a => a.type === 'call').length;
+  const visitsToday = todayActivities.filter(a => a.type === 'visit').length;
 
   // ── This week stats ────────────────────────────────────────────
   const weekStart = new Date(now);
@@ -50,7 +61,7 @@ export default function Dashboard() {
   const weekEmails = thisWeekActivities.filter(a => a.type === 'email').length;
   const weekNotes = thisWeekActivities.filter(a => a.type === 'note').length;
 
-  // ── Coming up soon (next 7–14 days, not already due) ──────────
+  // ── Coming up soon (next 7–14 days) ──────────────────────────
   const comingSoon = customers
     .filter(c => c.activeStatus && !visitDueIds.has(c.id))
     .map(c => ({ c, next: calculateNextVisit(c.lastContactDate, c.visitFrequency, c.dayOfWeek) }))
@@ -64,58 +75,118 @@ export default function Dashboard() {
     .sort((a, b) => new Date(a.followUpDate!).getTime() - new Date(b.followUpDate!).getTime())
     .slice(0, 6);
 
+  const handleCompleteTask = (handoffId: string, customerId: string) => {
+    const note = (taskNotes[handoffId] ?? '').trim();
+    if (!note) return;
+    // Log the rep's follow-up as an activity
+    addActivity({
+      id: `task_${Date.now()}`,
+      customerId,
+      type: 'note',
+      date: new Date().toISOString(),
+      repName: currentUser?.name ?? 'Unknown',
+      summary: `[CS Task completed] ${note}`,
+      source: 'manual',
+    });
+    ackCSHandoff(handoffId);
+    setTaskNotes(p => { const n = { ...p }; delete n[handoffId]; return n; });
+    setTaskExpanded(p => { const n = { ...p }; delete n[handoffId]; return n; });
+  };
+
   return (
-    <div className="space-y-5 max-w-2xl mx-auto">
+    <div className="space-y-4 max-w-2xl mx-auto">
       <AssignmentAlert />
 
+      {/* ── Top stat strip ─────────────────────────────────── */}
+      <div className="grid grid-cols-4 gap-3">
+        {[
+          { label: 'Open Tasks', count: csHandoffs.length, color: csHandoffs.length > 0 ? 'text-amber-600' : 'text-gray-400', bg: csHandoffs.length > 0 ? 'bg-amber-50 border-amber-200' : 'bg-white border-gray-100' },
+          { label: 'Visits Today', count: visitsToday, color: 'text-green-600', bg: 'bg-white border-gray-100' },
+          { label: 'Need Outreach', count: visitsDue.length + checkInsNeeded.length, color: visitsDue.length + checkInsNeeded.length > 0 ? 'text-red-500' : 'text-gray-400', bg: visitsDue.length + checkInsNeeded.length > 0 ? 'bg-red-50 border-red-100' : 'bg-white border-gray-100' },
+          { label: 'Calls Today', count: callsToday, color: 'text-blue-600', bg: 'bg-white border-gray-100' },
+        ].map(({ label, count, color, bg }) => (
+          <div key={label} className={`rounded-2xl border ${bg} p-3 text-center`}>
+            <p className={`text-2xl font-black ${color}`}>{count}</p>
+            <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide mt-0.5 leading-tight">{label}</p>
+          </div>
+        ))}
+      </div>
+
+      {/* ── Greeting ───────────────────────────────────────── */}
+      <div>
+        <p className="text-xl font-bold text-gray-900">Good morning, {currentUser?.name?.split(' ')[0]}</p>
+        <p className="text-sm text-gray-400 mt-0.5">{today}</p>
+      </div>
+
+      {/* ── Open Tasks (CS handoffs) ───────────────────────── */}
       {csHandoffs.length > 0 && (
         <div className="bg-white rounded-2xl border border-amber-200 shadow-sm overflow-hidden">
           <div className="px-5 py-3 bg-amber-50 border-b border-amber-100 flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <Phone size={14} className="text-amber-600" />
-              <p className="text-xs font-bold text-amber-700 uppercase tracking-wider">CS Flagged — Needs Your Follow-up</p>
+              <CheckSquare size={14} className="text-amber-600" />
+              <p className="text-xs font-bold text-amber-700 uppercase tracking-wider">Open Tasks</p>
             </div>
             <span className="text-[10px] font-bold bg-amber-500 text-white px-2 py-0.5 rounded-full">{csHandoffs.length}</span>
           </div>
-          <div className="divide-y divide-amber-50">
+          <div className="divide-y divide-gray-50">
             {csHandoffs.map(h => {
-              const typeLabel: Record<string, string> = { call: 'Phone Call', visit: 'Field Visit', email: 'Email', note: 'Note' };
-              const label = typeLabel[h.activityType ?? 'note'] ?? 'Note';
+              const label = TYPE_LABEL[h.activityType ?? 'note'] ?? 'Note';
               const dateStr = h.date ? new Date(h.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : '';
+              const isExpanded = !!taskExpanded[h.id];
+              const note = taskNotes[h.id] ?? '';
               return (
                 <div key={h.id} className="p-4 space-y-2">
+                  {/* Task header */}
                   <div className="flex items-start justify-between gap-2">
                     <div>
                       <button onClick={() => {
                         const c = customers.find(x => x.id === h.customerId || x.name.toLowerCase() === h.customerName.toLowerCase());
                         if (c) setSelectedCustomer(c);
-                      }} className="text-sm font-bold text-amber-700 hover:underline text-left">{h.customerName}</button>
+                      }} className="text-sm font-bold text-gray-900 hover:text-amber-700 hover:underline text-left">{h.customerName}</button>
                       <div className="flex items-center gap-2 mt-0.5">
                         <span className="text-[10px] font-bold bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded uppercase tracking-wide">{label}</span>
-                        <span className="text-[10px] text-gray-400">{dateStr}</span>
-                        <span className="text-[10px] text-gray-400">· {h.csName}</span>
+                        <span className="text-[10px] text-gray-400">{dateStr} · {h.csName}</span>
                       </div>
                     </div>
-                    <button onClick={() => ackCSHandoff(h.id)}
-                      className="flex-shrink-0 text-[10px] font-bold text-gray-500 hover:text-green-600 bg-gray-100 hover:bg-green-50 px-2 py-1 rounded-lg transition-colors whitespace-nowrap">
-                      Mark Done
+                    <button
+                      onClick={() => setTaskExpanded(p => ({ ...p, [h.id]: !p[h.id] }))}
+                      className="flex-shrink-0 text-[10px] font-bold text-amber-600 hover:text-amber-700 bg-amber-50 hover:bg-amber-100 px-2 py-1 rounded-lg transition-colors whitespace-nowrap"
+                    >
+                      {isExpanded ? 'Cancel' : 'Complete'}
                     </button>
                   </div>
-                  <p className="text-xs text-gray-700 bg-amber-50 rounded-lg px-3 py-2 leading-relaxed">{h.notes}</p>
+
+                  {/* CS note */}
+                  <p className="text-xs text-gray-700 bg-gray-50 rounded-lg px-3 py-2 leading-relaxed">{h.notes}</p>
+
+                  {/* Complete with note */}
+                  {isExpanded && (
+                    <div className="space-y-2 pt-1">
+                      <textarea
+                        value={note}
+                        onChange={e => setTaskNotes(p => ({ ...p, [h.id]: e.target.value }))}
+                        placeholder="What did you do? (e.g. I called Nitin and he confirmed interest — will visit Thursday)"
+                        rows={2}
+                        autoFocus
+                        className="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-xs text-gray-700 outline-none resize-none focus:border-amber-400 transition-colors"
+                      />
+                      <button
+                        onClick={() => handleCompleteTask(h.id, h.customerId)}
+                        disabled={!note.trim()}
+                        className={`w-full py-2 rounded-lg text-xs font-bold transition-all ${
+                          note.trim() ? 'bg-green-500 hover:bg-green-600 text-white' : 'bg-gray-100 text-gray-400'
+                        }`}
+                      >
+                        Mark Complete & Log Note
+                      </button>
+                    </div>
+                  )}
                 </div>
               );
             })}
           </div>
         </div>
       )}
-
-      {/* Greeting */}
-      <div className="flex items-baseline justify-between">
-        <div>
-          <p className="text-xl font-bold text-gray-900">Good morning, {currentUser?.name?.split(' ')[0]}</p>
-          <p className="text-sm text-gray-400 mt-0.5">{today}</p>
-        </div>
-      </div>
 
       {/* ── Key action cards ───────────────────────────────── */}
 
@@ -223,7 +294,7 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* ── Coming up / if you have extra time ─────────────── */}
+      {/* ── Coming up soon ─────────────────────────────────── */}
       {comingSoon.length > 0 && (
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
           <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Coming up soon — get ahead</p>
@@ -275,47 +346,6 @@ export default function Dashboard() {
                     {daysUntil === 0 ? 'TODAY' : daysUntil === 1 ? 'TOMORROW' : `IN ${daysUntil}D`}
                   </span>
                 </button>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      {csHandoffs.length > 0 && (
-        <div className="bg-white rounded-2xl border border-amber-200 shadow-sm overflow-hidden">
-          <div className="px-5 py-3 bg-amber-50 border-b border-amber-100 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Phone size={14} className="text-amber-600" />
-              <p className="text-xs font-bold text-amber-700 uppercase tracking-wider">CS Flagged — Needs Your Follow-up</p>
-            </div>
-            <span className="text-[10px] font-bold bg-amber-500 text-white px-2 py-0.5 rounded-full">{csHandoffs.length}</span>
-          </div>
-          <div className="divide-y divide-amber-50">
-            {csHandoffs.map(h => {
-              const typeLabel: Record<string, string> = { call: 'Phone Call', visit: 'Field Visit', email: 'Email', note: 'Note' };
-              const label = typeLabel[h.activityType ?? 'note'] ?? 'Note';
-              const dateStr = h.date ? new Date(h.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : '';
-              return (
-                <div key={h.id} className="p-4 space-y-2">
-                  <div className="flex items-start justify-between gap-2">
-                    <div>
-                      <button onClick={() => {
-                        const c = customers.find(x => x.id === h.customerId || x.name.toLowerCase() === h.customerName.toLowerCase());
-                        if (c) setSelectedCustomer(c);
-                      }} className="text-sm font-bold text-amber-700 hover:underline text-left">{h.customerName}</button>
-                      <div className="flex items-center gap-2 mt-0.5">
-                        <span className="text-[10px] font-bold bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded uppercase tracking-wide">{label}</span>
-                        <span className="text-[10px] text-gray-400">{dateStr}</span>
-                        <span className="text-[10px] text-gray-400">· {h.csName}</span>
-                      </div>
-                    </div>
-                    <button onClick={() => ackCSHandoff(h.id)}
-                      className="flex-shrink-0 text-[10px] font-bold text-gray-500 hover:text-green-600 bg-gray-100 hover:bg-green-50 px-2 py-1 rounded-lg transition-colors whitespace-nowrap">
-                      Mark Done
-                    </button>
-                  </div>
-                  <p className="text-xs text-gray-700 bg-amber-50 rounded-lg px-3 py-2 leading-relaxed">{h.notes}</p>
-                </div>
               );
             })}
           </div>
