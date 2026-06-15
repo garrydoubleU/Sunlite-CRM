@@ -68,10 +68,15 @@ function doGet(e) {
         const head = h.toString().toLowerCase();
         return head.includes("sales rep email") || head.includes("salesrep") || head.includes("rep");
       });
+      const assignedIdx = headers.findIndex(h =>
+        h.toString().toLowerCase().trim() === "assignedsalesman" || h.toString().toLowerCase().trim() === "assigned salesman"
+      );
 
       const filtered = isAdmin ? rows : rows.filter(row => {
         const repField = (row[repIndex] || "").toString().toLowerCase();
-        const repList = repField.split(/[,\s;]+/).map(s => s.trim());
+        const assignedField = assignedIdx !== -1 ? (row[assignedIdx] || "").toString().toLowerCase() : "";
+        const combined = [repField, assignedField].filter(Boolean).join(",");
+        const repList = combined.split(/[,\s;]+/).map(s => s.trim()).filter(Boolean);
         return repList.includes(userEmail) || repList.includes("open");
       });
 
