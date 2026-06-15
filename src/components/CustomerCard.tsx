@@ -57,10 +57,10 @@ export default function CustomerCard({ customer, onOpenModal }: CustomerCardProp
         {/* Rep & territory */}
         <div className="flex items-center gap-3 mb-3">
           <div className="w-6 h-6 rounded-full bg-amber-100 flex items-center justify-center text-amber-600 text-[10px] font-bold">
-            {customer.assignedRepName.split(' ').map(n => n[0]).join('')}
+            {(customer.assignedRepName || 'U').split(' ').map(n => n[0]).join('')}
           </div>
           <div>
-            <p className="text-xs font-medium text-gray-700">{customer.assignedRepName}</p>
+            <p className="text-xs font-medium text-gray-700">{customer.assignedRepName || 'Unassigned'}</p>
             <p className="text-[10px] text-gray-400">{customer.territory}</p>
           </div>
         </div>
