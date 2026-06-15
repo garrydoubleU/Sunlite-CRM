@@ -204,6 +204,9 @@ function doGet(e) {
         // Match salesperson name → email via Users sheet
         let firstRepEmail = "";
         let firstRepName = repDisplayName;
+        if (!repDisplayName) {
+          return createJsonResponse({ status: "Success", debug: "repDisplayName empty", repNameColIdx: repNameColIdx, custHeaders: custHeaders.join("|") });
+        }
         if (repDisplayName) {
           const userSheet = ss.getSheetByName("Users");
           if (userSheet) {
@@ -220,6 +223,9 @@ function doGet(e) {
               }
             }
           }
+        }
+        if (!firstRepEmail) {
+          return createJsonResponse({ status: "Success", debug: "no email match", repDisplayName: repDisplayName });
         }
         if (firstRepEmail) {
           const csRepName = repName || userEmail;
@@ -263,12 +269,7 @@ function doGet(e) {
         }
       }
 
-      const notifyDebug = notifyRep ? {
-        repDisplayName: typeof repDisplayName !== "undefined" ? repDisplayName : "VAR_MISSING",
-        firstRepEmail: typeof firstRepEmail !== "undefined" ? firstRepEmail : "VAR_MISSING",
-        custHeadersSample: custHeaders.slice(0, 10).join(" | ")
-      } : null;
-      return createJsonResponse({ status: "Success", notifyDebug });
+      return createJsonResponse({ status: "Success", custHeaders: custHeaders.slice(0,10).join("|") });
     }
 
     // ───────────────────────────────────────── 4b. DELETE LOG
