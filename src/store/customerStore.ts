@@ -3,7 +3,7 @@ import type { Customer, Activity, Assignment, AccessRequest } from '../types';
 import { CUSTOMERS, ACTIVITIES } from '../api/mockData';
 import {
   fetchCustomers, fetchAllCustomers, fetchActivities, saveActivity as gasSave,
-  deleteActivity as gasDelete, isGASConfigured, triggerEmailSync,
+  deleteActivity as gasDelete, isGASConfigured, triggerEmailSync, fetchUsers,
   assignCustomer as gasAssign, fetchAssignments, acknowledgeAssignment as gasAck,
   requestAccess as gasRequestAccess, fetchAccessRequests, resolveAccessRequest as gasResolve,
   type GASCustomer, type GASActivity,
@@ -110,15 +110,31 @@ export const useCustomerStore = create<CustomerState>((set, get) => ({
     // Reps get only their assigned book, filtered server-side by email.
     const seesAll = currentUser?.role === 'owner' || currentUser?.role === 'admin';
     try {
-      const [rawCustomers, rawActivities] = await Promise.all([
+      const [rawCustomers, rawActivities, rawUsers] = await Promise.all([
         seesAll ? fetchAllCustomers() : fetchCustomers(email),
         fetchActivities(),
+        fetchUsers().catch(() => []),
       ]);
+
+      // Build email → display name map so log entries show "Garry" not the email
+      const emailToName: Record<string, string> = {};
+      rawUsers.forEach(u => {
+        if (u.email && u.name) emailToName[u.email.toLowerCase().trim()] = u.name;
+      });
+
+      const enrichRepName = (raw: string): string => {
+        if (!raw) return raw;
+        const lower = raw.toLowerCase().trim();
+        // If it's an email address, swap it for the display name
+        if (lower.includes('@')) return emailToName[lower] ?? raw;
+        return raw;
+      };
+
       const customers = rawCustomers.map(gasCustomerToLocal);
       set({
         customers,
-        directory: customers, // reps refine this below
-        activities: rawActivities.map(gasActivityToLocal),
+        directory: customers,
+        activities: rawActivities.map(a => ({ ...gasActivityToLocal(a), repName: enrichRepName(a.repName) })),
         lastSync: new Date(),
         isSyncing: false,
       });
@@ -160,10 +176,14 @@ export const useCustomerStore = create<CustomerState>((set, get) => ({
     set({ isSyncingEmails: true });
     try {
       await triggerEmailSync();
-      // Reload activities to pick up newly logged emails
-      const rawActivities = await fetchActivities();
+      const [rawActivities, rawUsers] = await Promise.all([fetchActivities(), fetchUsers().catch(() => [])]);
+      const emailToName: Record<string, string> = {};
+      rawUsers.forEach(u => { if (u.email && u.name) emailToName[u.email.toLowerCase().trim()] = u.name; });
       set({
-        activities: rawActivities.map(gasActivityToLocal),
+        activities: rawActivities.map(a => ({
+          ...gasActivityToLocal(a),
+          repName: a.repName?.toLowerCase().includes('@') ? (emailToName[a.repName.toLowerCase().trim()] ?? a.repName) : a.repName,
+        })),
         isSyncingEmails: false,
       });
     } catch {
