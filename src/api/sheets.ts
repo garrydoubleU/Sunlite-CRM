@@ -233,13 +233,23 @@ function mapRawLog(raw: Record<string, unknown>, idx: number): GASActivity {
 
   const sourceStr = pick('source').toLowerCase();
 
+  // Try every common column name for the rep/user field.
+  // As a final fallback, scan all values in the row for an email address —
+  // this handles whatever the customer named their Log sheet column.
+  let repName = pick('repname', 'username', 'user', 'useremail', 'rep', 'salesrep', 'email', 'loggedby', 'loggedbyemail');
+  if (!repName) {
+    for (const v of Object.values(r)) {
+      const s = String(v ?? '').trim();
+      if (s.includes('@') && s.includes('.') && !s.includes(' ')) { repName = s; break; }
+    }
+  }
+
   return {
     id: pick('id', 'logid') || `log_${idx}`,
     customerId: customerID || customerName,
     type: typeMap[logTypeStr] ?? 'note',
     date: safeDate(pick('timestamp', 'date')),
-    // Prefer a human name; fall back to the logging email
-    repName: pick('repname', 'username', 'user', 'useremail', 'email'),
+    repName,
     summary: pick('notes', 'summary', 'note'),
     source: sourceStr === 'gmail-auto' ? 'gmail-auto' : 'manual',
     ...(followUpDate ? { followUpDate } : {}),
