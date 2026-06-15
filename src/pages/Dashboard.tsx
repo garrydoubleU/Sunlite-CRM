@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Clock, ChevronDown, ChevronUp, Phone, Mail, TrendingUp, CheckSquare } from 'lucide-react';
 import { useCustomerStore } from '../store/customerStore';
 import { useAuthStore } from '../store/authStore';
@@ -14,10 +14,13 @@ import type { Customer } from '../types';
 const TYPE_LABEL: Record<string, string> = { call: 'Phone Call', visit: 'Field Visit', email: 'Email', note: 'Note' };
 
 export default function Dashboard() {
-  const { customers, activities, csHandoffs, ackCSHandoff, addActivity } = useCustomerStore();
+  const { customers, activities, csHandoffs, ackCSHandoff, addActivity, loadCSHandoffs } = useCustomerStore();
   const { currentUser } = useAuthStore();
   const role = currentUser?.role ?? 'field_sales';
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
+
+  // Refresh CS handoffs every time the dashboard mounts (catches handoffs created after login)
+  useEffect(() => { loadCSHandoffs(); }, []);
   const [visitsOpen, setVisitsOpen] = useState(false);
   const [checkInsOpen, setCheckInsOpen] = useState(false);
   // Per-task completion note state: { [handoffId]: string }
