@@ -1,6 +1,6 @@
 /**
  * GOOGLE APPS SCRIPT — SUNLITE CRM HUB
- * Version 3.1 — AssignedSalesman column filter; improved CS→rep email with activity type; ActivityType stored in CSHandoffs
+ * Version 3.2 — Fix CSHandoffs RepEmail storing full comma-list instead of first rep email
  *
  * Handles: login, customers (own + all), logs (read/save/delete), users,
  *          quick links, email send, gmail sync, customer-email update,
@@ -239,7 +239,7 @@ function doGet(e) {
             Utilities.getUuid(),
             customerID || customerName,
             customerName,
-            repEmail.toLowerCase(),
+            firstRepEmail.toLowerCase(),
             csRepName,
             now,
             notes,
