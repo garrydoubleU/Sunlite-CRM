@@ -559,8 +559,8 @@ export default function CustomerModal({ customer, onClose }: CustomerModalProps)
                 </div>
               )}
 
-              {/* Log form */}
-              <div className="space-y-2">
+              {/* Log form — hidden for owner */}
+              {role !== 'owner' && <div className="space-y-2">
                 <p className="text-[11px] font-black text-gray-700 uppercase tracking-wider">Log Activity</p>
                 <textarea
                   value={notes}
@@ -619,7 +619,7 @@ export default function CustomerModal({ customer, onClose }: CustomerModalProps)
                     <button onClick={() => setGasDebug(null)} className="text-[10px] text-gray-400 hover:text-gray-600 mt-1">dismiss</button>
                   </div>
                 )}
-              </div>
+              </div>}
 
               {/* Divider — history hidden for restricted reps */}
               {!restricted && (
