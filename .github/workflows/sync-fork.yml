@@ -19,6 +19,5 @@ jobs:
           git remote add fork https://garrydoubleU:${{ secrets.FORK_PAT }}@github.com/garrydoubleU/Sunlite-CRM.git
           git push fork HEAD:main --force
           git push fork HEAD:claude/eager-goldberg-p77x8t --force
-
-      - name: Trigger Vercel production deployment
-        run: curl -X POST ${{ secrets.VERCEL_DEPLOY_HOOK }}
+          sleep 5
+          curl -s -X POST ${{ secrets.VERCEL_DEPLOY_HOOK }}
