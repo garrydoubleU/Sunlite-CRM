@@ -567,8 +567,7 @@ export default function CustomerModal({ customer, onClose }: CustomerModalProps)
                   rows={2}
                   className="w-full bg-gray-50 border border-gray-200 rounded-lg px-2.5 py-2 text-xs text-gray-700 outline-none resize-none focus:border-amber-400 transition-colors"
                 />
-                {(currentUser?.role === 'customer_service' || currentUser?.role === 'inside_sales') &&
-                  customer.assignedRepId && (
+                {(currentUser?.role === 'customer_service' || currentUser?.role === 'inside_sales') && (
                   <label className="flex items-center gap-2 text-xs text-gray-600 cursor-pointer">
                     <input
                       type="checkbox"
