@@ -651,7 +651,12 @@ function assignCustomerToRep(ss, customerId, customerName, toEmail, toName, byEm
       const isMatch = (customerId && rowId === customerId.trim()) ||
                       (customerName && rowName === customerName.toLowerCase().trim());
       if (isMatch) {
-        if (repIdx !== -1) customerSheet.getRange(i + 1, repIdx + 1).setValue(toEmail);
+        if (repIdx !== -1) {
+          const existing = String(data[i][repIdx] || "").trim();
+          const emails = existing ? existing.split(/[,;\s]+/).map(e => e.trim().toLowerCase()).filter(Boolean) : [];
+          if (!emails.includes(toEmail.toLowerCase())) emails.push(toEmail.toLowerCase());
+          customerSheet.getRange(i + 1, repIdx + 1).setValue(emails.join(", "));
+        }
         if (repNameIdx !== -1 && toName) customerSheet.getRange(i + 1, repNameIdx + 1).setValue(toName);
         break;
       }
