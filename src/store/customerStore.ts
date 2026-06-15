@@ -110,7 +110,7 @@ export const useCustomerStore = create<CustomerState>((set, get) => ({
     const seesAll = currentUser?.role === 'owner' || currentUser?.role === 'admin';
     try {
       const [rawCustomers, rawActivities, rawUsers] = await Promise.all([
-        seesAll ? fetchAllCustomers() : fetchCustomers(email),
+        seesAll ? fetchAllCustomers(email) : fetchCustomers(email),
         fetchActivities(),
         fetchUsers().catch(() => []),
       ]);
@@ -122,10 +122,19 @@ export const useCustomerStore = create<CustomerState>((set, get) => ({
       });
 
       const enrichRepName = (raw: string): string => {
-        if (!raw) return raw;
-        const lower = raw.toLowerCase().trim();
-        if (lower.includes('@')) return emailToName[lower] ?? lower.split('@')[0];
-        return raw;
+        if (!raw || !raw.trim()) return 'Unknown';
+        const trimmed = raw.trim();
+        const lower = trimmed.toLowerCase();
+        if (lower.includes('@')) {
+          // Try exact lowercase match first, then any partial match
+          if (emailToName[lower]) return emailToName[lower];
+          const matchKey = Object.keys(emailToName).find(k => k === lower || lower.endsWith('@' + k.split('@')[1]));
+          if (matchKey) return emailToName[matchKey];
+          // Fallback: use part before @ and capitalize it
+          const prefix = lower.split('@')[0];
+          return prefix.charAt(0).toUpperCase() + prefix.slice(1);
+        }
+        return trimmed;
       };
 
       const customers = rawCustomers.map(gasCustomerToLocal);

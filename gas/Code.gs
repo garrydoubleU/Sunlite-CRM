@@ -125,24 +125,24 @@ function doGet(e) {
       const visitFrequency = e.parameter.VisitFrequency || "";
       const visitStartDate = e.parameter.VisitStartDate || "";
 
-      // A. Append to the history log — header-driven so column order never matters
-      const logHeaders = logSheet.getDataRange().getValues()[0].map(h => h.toString().replace(/\s+/g, ""));
+      // A. Append to the history log — header-driven, case-insensitive matching
+      const repName = e.parameter.repName || e.parameter.RepName || "";
+      const logHeaders = logSheet.getDataRange().getValues()[0].map(h => h.toString().replace(/\s+/g, "").toLowerCase());
       const row = logHeaders.map(h => {
-        switch (h) {
-          case "ID":           return id;
-          case "Timestamp":    return timestamp;
-          case "UserEmail":    return userEmail;
-          case "CustomerName": return customerName;
-          case "CustomerID":   return customerID;
-          case "Notes":        return notes;
-          case "Reason":       return e.parameter.Reason || "";
-          case "NewEmail":     return e.parameter.NewEmail || "";
-          case "FollowUpDate": return followUpDate;
-          case "LogType":      return logType;
-          case "Type":         return logType;
-          case "Priority":     return priority;
-          default:             return "";
-        }
+        if (h === "id")                                                    return id;
+        if (h === "timestamp" || h === "date")                             return timestamp;
+        if (h === "useremail" || h === "email" || h === "remail")          return userEmail;
+        if (h === "repname" || h === "salesrep" || h === "rep" || h === "salesperson") return repName || userEmail;
+        if (h === "username" || h === "user" || h === "loggedby")          return repName || userEmail;
+        if (h === "customername" || h === "customer")                      return customerName;
+        if (h === "customerid" || h === "custid")                          return customerID;
+        if (h === "notes" || h === "summary" || h === "note")              return notes;
+        if (h === "reason")                                                return e.parameter.Reason || "";
+        if (h === "newemail")                                              return e.parameter.NewEmail || "";
+        if (h === "followupdate" || h === "followup")                      return followUpDate;
+        if (h === "logtype" || h === "type" || h === "activitytype")       return logType;
+        if (h === "priority")                                              return priority;
+        return "";
       });
       logSheet.appendRow(row);
 

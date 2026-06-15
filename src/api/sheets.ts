@@ -181,11 +181,12 @@ export async function fetchCustomers(userEmail?: string): Promise<GASCustomer[]>
 }
 
 // Owner / admin: pull every account regardless of rep assignment.
-// Falls back to the unfiltered getCustomers if the action isn't deployed yet.
-export async function fetchAllCustomers(): Promise<GASCustomer[]> {
+// Falls back to getCustomers with the user's email so the old GAS script
+// can look up their role and return all rows (admin path).
+export async function fetchAllCustomers(fallbackEmail?: string): Promise<GASCustomer[]> {
   const raw = await gasGet<Record<string, unknown>[] | { error: string }>('getAllCustomers');
   if (Array.isArray(raw) && raw.length > 0) return raw.map(mapRawCustomer);
-  return fetchCustomers(); // fallback: getCustomers with no email
+  return fetchCustomers(fallbackEmail); // with email so GAS admin-path fires
 }
 
 // ── Activities / Logs ─────────────────────────────────────────
