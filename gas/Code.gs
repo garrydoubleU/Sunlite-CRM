@@ -1,6 +1,6 @@
 /**
  * GOOGLE APPS SCRIPT — SUNLITE CRM HUB
- * Version 3.5 — Notify rep by matching Salesperson Name → Users sheet email (not Sales Rep Email column)
+ * Version 3.6 — Fix column lookup using space-stripped headers; exact name match to Users sheet
  *
  * Handles: login, customers (own + all), logs (read/save/delete), users,
  *          quick links, email send, gmail sync, customer-email update,
@@ -185,15 +185,16 @@ function doGet(e) {
       // C. If notifyRep=true, email the assigned rep and write to CSHandoffs sheet
       const notifyRep = (e.parameter.notifyRep || "").toLowerCase() === "true";
       if (notifyRep) {
-        // Find the salesperson name from the Customers sheet, then look up their email in Users
-        const repNameColIdx = custHeaders.findIndex(h => {
-          const ns = h.replace(/\s+/g, '');
-          return ns === "salespersonname" || ns === "repname" || ns.includes("salesperson");
-        });
+        // Use space-stripped headers for column lookup
+        const custHeadersNS = custData[0].map(h => h.toString().replace(/\s+/g,'').toLowerCase());
+        const custIdIdx2   = custHeadersNS.findIndex(h => h === "customerid" || h === "custid" || h === "id");
+        const custNameIdx2 = custHeadersNS.findIndex(h => h === "customername" || h === "customer");
+        const repNameColIdx = custHeadersNS.findIndex(h => h === "salespersonname" || h === "repname");
+
         let repDisplayName = "";
         for (let i = 1; i < custData.length; i++) {
-          const rowId = custData[i][idIdx]?.toString().trim();
-          const rowName = custData[i][nameIdx]?.toString().trim().toLowerCase();
+          const rowId   = String(custData[i][custIdIdx2] || "").trim();
+          const rowName = String(custData[i][custNameIdx2] || "").trim().toLowerCase();
           const isMatch = (customerID && rowId === customerID.trim()) ||
                           (customerName && rowName === customerName.toLowerCase().trim());
           if (isMatch) {
@@ -201,31 +202,27 @@ function doGet(e) {
             break;
           }
         }
-        // Match salesperson name → email via Users sheet
+
+        // Match salesperson name exactly to Users sheet userName → get their email
         let firstRepEmail = "";
         let firstRepName = repDisplayName;
-        if (!repDisplayName) {
-          return createJsonResponse({ status: "Success", debug: "repDisplayName empty", repNameColIdx: repNameColIdx, custHeaders: custHeaders.join("|") });
-        }
         if (repDisplayName) {
           const userSheet = ss.getSheetByName("Users");
           if (userSheet) {
             const userData = userSheet.getDataRange().getValues();
             const uHeaders = userData[0].map(h => h.toString().toLowerCase().trim());
             const uEmailIdx = uHeaders.indexOf("email");
-            const uNameIdx = uHeaders.indexOf("username");
+            const uNameIdx  = uHeaders.indexOf("username");
+            const repLower  = repDisplayName.toLowerCase();
             for (let i = 1; i < userData.length; i++) {
               const uName = String(userData[i][uNameIdx] || "").trim().toLowerCase();
-              if (uName && repDisplayName.toLowerCase().includes(uName) || uName.includes(repDisplayName.toLowerCase())) {
+              if (uName && uName === repLower) {
                 firstRepEmail = String(userData[i][uEmailIdx] || "").toLowerCase().trim();
-                firstRepName = String(userData[i][uNameIdx] || "").trim();
+                firstRepName  = String(userData[i][uNameIdx] || "").trim();
                 break;
               }
             }
           }
-        }
-        if (!firstRepEmail) {
-          return createJsonResponse({ status: "Success", debug: "no email match", repDisplayName: repDisplayName });
         }
         if (firstRepEmail) {
           const csRepName = repName || userEmail;
@@ -269,7 +266,7 @@ function doGet(e) {
         }
       }
 
-      return createJsonResponse({ status: "Success", custHeaders: custHeaders.slice(0,10).join("|") });
+      return createJsonResponse({ status: "Success" });
     }
 
     // ───────────────────────────────────────── 4b. DELETE LOG
