@@ -1,6 +1,6 @@
 /**
  * GOOGLE APPS SCRIPT — SUNLITE CRM HUB
- * Version 3.6 — Fix column lookup using space-stripped headers; exact name match to Users sheet
+ * Version 3.7 — CS Tasks: CSEmail column, getCSHandoffsByCSEmail, nudgeRep, ackNotes; simplified rep email
  *
  * Handles: login, customers (own + all), logs (read/save/delete), users,
  *          quick links, email send, gmail sync, customer-email update,
@@ -231,36 +231,36 @@ function doGet(e) {
           }[cleanType] || logType || "Activity";
           const now = new Date();
           const dateStr = Utilities.formatDate(now, Session.getScriptTimeZone(), "MMM d, yyyy 'at' h:mm a");
+          const appUrl = PropertiesService.getScriptProperties().getProperty("APP_URL") || "https://your-crm-app.com";
           const emailBody = [
             "Hi " + firstRepName + ",",
             "",
-            "A new activity was logged on your account — " + customerName + ":",
+            "You have a new notification on account: " + customerName + ".",
             "",
-            "Type: " + activityLabel,
-            "Date: " + dateStr,
-            "Logged by: " + csRepName,
-            "",
-            notes,
+            "Log in to see the details:",
+            appUrl,
             "",
             "— Sunlite CRM"
           ].join("\n");
           try {
-            MailApp.sendEmail(firstRepEmail, "New " + activityLabel + " logged — " + customerName, emailBody);
+            MailApp.sendEmail(firstRepEmail, "New notification — " + customerName, emailBody);
           } catch(mailErr) {
             Logger.log("Rep email failed: " + mailErr.toString());
           }
           // Write to CSHandoffs sheet
           const handoffSheet = getOrCreateSheet(ss, "CSHandoffs",
-            ["ID", "CustomerID", "CustomerName", "RepEmail", "CSName", "Date", "Notes", "Acknowledged", "ActivityType"]);
+            ["ID", "CustomerID", "CustomerName", "RepEmail", "CSName", "CSEmail", "Date", "Notes", "Acknowledged", "AckNotes", "ActivityType"]);
           handoffSheet.appendRow([
             Utilities.getUuid(),
             customerID || customerName,
             customerName,
             firstRepEmail.toLowerCase(),
             csRepName,
+            userEmail.toLowerCase(),
             now,
             notes,
             "false",
+            "",
             logType || "note"
           ]);
         }
@@ -547,6 +547,7 @@ function doGet(e) {
 
     if (action === "acknowledgeCSHandoff") {
       const id = e.parameter.id || "";
+      const ackNote = e.parameter.ackNote || "";
       const sheet = ss.getSheetByName("CSHandoffs");
       if (!sheet) return createJsonResponse({ error: "No CSHandoffs sheet" });
       const data = sheet.getDataRange().getValues();
@@ -556,10 +557,65 @@ function doGet(e) {
         if (idIdx2 >= 0 && String(data[i][idIdx2]) === id) {
           const ackIdx = headers.indexOf("Acknowledged");
           if (ackIdx >= 0) sheet.getRange(i + 1, ackIdx + 1).setValue("true");
+          const ackNotesIdx = headers.indexOf("AckNotes");
+          if (ackNotesIdx >= 0 && ackNote) sheet.getRange(i + 1, ackNotesIdx + 1).setValue(ackNote);
           return createJsonResponse({ status: "ok" });
         }
       }
       return createJsonResponse({ error: "Not found" });
+    }
+
+    // ── CS Tasks: fetch all handoffs created by a CS user ─────────────
+    if (action === "getCSHandoffsByCSEmail") {
+      const csEmail = (e.parameter.csEmail || "").toLowerCase().trim();
+      const sheet = ss.getSheetByName("CSHandoffs");
+      if (!sheet) return createJsonResponse([]);
+      const data = sheet.getDataRange().getValues();
+      const headers = data[0].map(h => h.toString().replace(/\s+/g, ''));
+      const out = [];
+      for (let i = 1; i < data.length; i++) {
+        const obj = rowToObj(headers, data[i]);
+        if (String(obj.CSEmail || "").toLowerCase().trim() === csEmail) {
+          out.push(obj);
+        }
+      }
+      return createJsonResponse(out.reverse());
+    }
+
+    // ── Nudge rep: resend simple notification for a specific handoff ───
+    if (action === "nudgeRep") {
+      const id = e.parameter.id || "";
+      const sheet = ss.getSheetByName("CSHandoffs");
+      if (!sheet) return createJsonResponse({ error: "No CSHandoffs sheet" });
+      const data = sheet.getDataRange().getValues();
+      const headers = data[0].map(h => h.toString().replace(/\s+/g, ''));
+      const idIdx2 = headers.indexOf("ID");
+      for (let i = 1; i < data.length; i++) {
+        if (idIdx2 >= 0 && String(data[i][idIdx2]) === id) {
+          const obj = rowToObj(headers, data[i]);
+          const repEmail = String(obj.RepEmail || "").toLowerCase().trim();
+          const custName = String(obj.CustomerName || "");
+          if (!repEmail) return createJsonResponse({ error: "No rep email" });
+          const appUrl = PropertiesService.getScriptProperties().getProperty("APP_URL") || "https://your-crm-app.com";
+          const emailBody = [
+            "Hi,",
+            "",
+            "Just a reminder — there's an open task waiting for you on account: " + custName + ".",
+            "",
+            "Log in to review and complete it:",
+            appUrl,
+            "",
+            "— Sunlite CRM"
+          ].join("\n");
+          try {
+            MailApp.sendEmail(repEmail, "Reminder — open task on " + custName, emailBody);
+          } catch(mailErr) {
+            return createJsonResponse({ error: "Email failed: " + mailErr.toString() });
+          }
+          return createJsonResponse({ status: "ok" });
+        }
+      }
+      return createJsonResponse({ error: "Handoff not found" });
     }
 
     return createJsonResponse({ error: "Action '" + action + "' not handled." });

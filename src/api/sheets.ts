@@ -514,8 +514,30 @@ export async function fetchCSHandoffs(repEmail: string): Promise<CSHandoff[]> {
   }));
 }
 
-export async function acknowledgeCSHandoff(id: string): Promise<void> {
-  await gasPost({ action: 'acknowledgeCSHandoff', id });
+export async function acknowledgeCSHandoff(id: string, ackNote?: string): Promise<void> {
+  await gasPost({ action: 'acknowledgeCSHandoff', id, ...(ackNote ? { ackNote } : {}) });
+}
+
+export async function fetchCSHandoffsByCSEmail(csEmail: string): Promise<CSHandoff[]> {
+  const raw = await gasGet<Record<string, unknown>[]>('getCSHandoffsByCSEmail', { csEmail });
+  if (!Array.isArray(raw)) return [];
+  return raw.map(r => ({
+    id: String(r.ID ?? ''),
+    customerId: String(r.CustomerID ?? ''),
+    customerName: String(r.CustomerName ?? ''),
+    repEmail: String(r.RepEmail ?? '').toLowerCase(),
+    csName: String(r.CSName ?? ''),
+    csEmail: String(r.CSEmail ?? '').toLowerCase(),
+    date: String(r.Date ?? ''),
+    notes: String(r.Notes ?? ''),
+    acknowledged: String(r.Acknowledged).toLowerCase() === 'true',
+    ackNotes: String(r.AckNotes ?? ''),
+    activityType: String(r.ActivityType ?? 'note'),
+  }));
+}
+
+export async function nudgeRep(id: string): Promise<void> {
+  await gasPost({ action: 'nudgeRep', id });
 }
 
 // ── Email sync ────────────────────────────────────────────────

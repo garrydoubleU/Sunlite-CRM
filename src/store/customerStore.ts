@@ -6,7 +6,7 @@ import {
   deleteActivity as gasDelete, isGASConfigured, triggerEmailSync, fetchUsers,
   assignCustomer as gasAssign, fetchAssignments, acknowledgeAssignment as gasAck,
   requestAccess as gasRequestAccess, fetchAccessRequests, resolveAccessRequest as gasResolve,
-  fetchCSHandoffs, acknowledgeCSHandoff,
+  fetchCSHandoffs, acknowledgeCSHandoff, fetchCSHandoffsByCSEmail, nudgeRep as gasNudgeRep,
   type GASCustomer, type GASActivity,
 } from '../api/sheets';
 import { useAuthStore } from './authStore';
@@ -89,7 +89,11 @@ interface CustomerState {
   resolveAccessRequest: (id: string, grant: boolean) => Promise<void>;
   // CS Handoff flows
   loadCSHandoffs: () => Promise<void>;
-  ackCSHandoff: (id: string) => void;
+  ackCSHandoff: (id: string, ackNote?: string) => void;
+  // CS Tasks view (sent by this CS user)
+  csTasksSent: CSHandoff[];
+  loadCSTasksSent: () => Promise<void>;
+  nudgeRep: (id: string) => Promise<void>;
 }
 
 export const useCustomerStore = create<CustomerState>((set, get) => ({
@@ -100,6 +104,7 @@ export const useCustomerStore = create<CustomerState>((set, get) => ({
   assignments: [],
   accessRequests: [],
   csHandoffs: [],
+  csTasksSent: [],
   emailToName: {},
   lastSync: null,
   isSyncing: false,
@@ -332,8 +337,20 @@ export const useCustomerStore = create<CustomerState>((set, get) => ({
     set({ csHandoffs: handoffs });
   },
 
-  ackCSHandoff: (id: string) => {
+  ackCSHandoff: (id: string, ackNote?: string) => {
     set(state => ({ csHandoffs: state.csHandoffs.filter(h => h.id !== id) }));
-    if (isGASConfigured()) acknowledgeCSHandoff(id).catch(() => {});
+    if (isGASConfigured()) acknowledgeCSHandoff(id, ackNote).catch(() => {});
+  },
+
+  loadCSTasksSent: async () => {
+    const { currentUser } = useAuthStore.getState();
+    const email = currentUser?.email ?? '';
+    if (!isGASConfigured() || !email) return;
+    const tasks = await fetchCSHandoffsByCSEmail(email).catch(() => []);
+    set({ csTasksSent: tasks });
+  },
+
+  nudgeRep: async (id: string) => {
+    if (isGASConfigured()) await gasNudgeRep(id).catch(() => {});
   },
 }));

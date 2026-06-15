@@ -57,9 +57,11 @@ export interface CSHandoff {
   customerName: string;
   repEmail: string;
   csName: string;
+  csEmail?: string;
   date: string;
   notes: string;
   acknowledged: boolean;
+  ackNotes?: string;
   activityType?: string;
 }
 

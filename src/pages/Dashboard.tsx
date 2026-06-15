@@ -91,7 +91,7 @@ export default function Dashboard() {
       summary: `[CS Task completed] ${note}`,
       source: 'manual',
     });
-    ackCSHandoff(handoffId);
+    ackCSHandoff(handoffId, note);
     setTaskNotes(p => { const n = { ...p }; delete n[handoffId]; return n; });
     setTaskExpanded(p => { const n = { ...p }; delete n[handoffId]; return n; });
   };
