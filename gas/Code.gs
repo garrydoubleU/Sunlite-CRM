@@ -166,6 +166,13 @@ function doGet(e) {
           if (followIdx !== -1 && followUpDate) customerSheet.getRange(i + 1, followIdx + 1).setValue(followUpDate);
           if (freqIdx !== -1 && visitFrequency) customerSheet.getRange(i + 1, freqIdx + 1).setValue(visitFrequency);
           if (dateIdx !== -1 && visitStartDate) customerSheet.getRange(i + 1, dateIdx + 1).setValue(visitStartDate);
+          // Always update LastContactDate so the dashboard re-evaluates urgency on next sync
+          const lastContactIdx = custHeaders.findIndex(h =>
+            h.includes("lastcontact") || h === "last contact date" || h === "lastcontactdate" || h === "date of last contact"
+          );
+          if (lastContactIdx !== -1) {
+            customerSheet.getRange(i + 1, lastContactIdx + 1).setValue(new Date());
+          }
           break;
         }
       }

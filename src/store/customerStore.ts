@@ -202,8 +202,16 @@ export const useCustomerStore = create<CustomerState>((set, get) => ({
   },
 
   addActivity: (activity: Activity) => {
-    // Optimistic update — show immediately
-    set(state => ({ activities: [activity, ...state.activities] }));
+    // Optimistic update — show immediately + update lastContactDate so dashboard re-sorts instantly
+    const today = new Date().toISOString().split('T')[0];
+    set(state => ({
+      activities: [activity, ...state.activities],
+      customers: state.customers.map(c =>
+        c.id === activity.customerId || c.name.toLowerCase() === activity.customerId.toLowerCase()
+          ? { ...c, lastContactDate: today }
+          : c
+      ),
+    }));
     // Background write to GAS using their saveLog format
     if (isGASConfigured()) {
       const { currentUser } = useAuthStore.getState();
