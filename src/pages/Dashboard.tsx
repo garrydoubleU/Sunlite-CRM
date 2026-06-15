@@ -300,7 +300,7 @@ export default function Dashboard() {
         </div>
       )}
 
-      <RoutePlanner />
+      <RoutePlanner onOpenModal={setSelectedCustomer} />
 
       {selectedCustomer && (
         <CustomerModal customer={selectedCustomer} onClose={() => setSelectedCustomer(null)} />

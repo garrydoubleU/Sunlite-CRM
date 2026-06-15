@@ -2,8 +2,13 @@ import { Clock, Calendar, AlertTriangle, CheckCircle } from 'lucide-react';
 import { format } from 'date-fns';
 import { useCustomerStore } from '../store/customerStore';
 import { calculateNextVisit, isOverdue, getDaysUntil, getDueDateLabel, getDueDateColor } from '../utils/scheduler';
+import type { Customer } from '../types';
 
-export default function RoutePlanner() {
+interface RoutePlannerProps {
+  onOpenModal?: (customer: Customer) => void;
+}
+
+export default function RoutePlanner({ onOpenModal }: RoutePlannerProps) {
   const { customers } = useCustomerStore();
 
   // Build route entries
@@ -58,8 +63,9 @@ export default function RoutePlanner() {
             {routeEntries.slice(0, 12).map(({ customer: c, nextVisit, overdue }) => (
               <div
                 key={c.id}
-                className={`flex items-center gap-3 p-3 rounded-xl border transition-colors ${
-                  overdue ? 'bg-red-50 border-red-200' : 'bg-gray-50 border-gray-100 hover:bg-amber-50 hover:border-amber-200'
+                onClick={() => onOpenModal?.(c)}
+                className={`flex items-center gap-3 p-3 rounded-xl border transition-colors ${onOpenModal ? 'cursor-pointer' : ''} ${
+                  overdue ? 'bg-red-50 border-red-200 hover:bg-red-100' : 'bg-gray-50 border-gray-100 hover:bg-amber-50 hover:border-amber-200'
                 }`}
               >
                 <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${
