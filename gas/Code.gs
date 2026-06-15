@@ -565,12 +565,15 @@ function typeLabel(t) {
 // Normalise a Customers row into the keys the app expects
 function mapCustomerRow(headers, row) {
   const obj = {};
+  let salesRepEmail = "";
+  let assignedSalesman = "";
   headers.forEach((h, i) => {
     let key = h.toString().trim();
     const low = key.toLowerCase();
     if (low === "customer id") key = "ID";
     if (low === "customername") key = "Customer";
-    if (low.includes("sales rep email")) key = "SalesRep";
+    if (low.includes("sales rep email")) { key = "SalesRep"; salesRepEmail = String(row[i] || "").trim(); }
+    if (low === "assignedsalesman" || low === "assigned salesman") { assignedSalesman = String(row[i] || "").trim(); }
     if (low === "salesperson name") key = "SalespersonName";
     if (low === "last order date") key = "LastOrderDate";
     if (low === "visit frequency") key = "VisitFrequency";
@@ -579,6 +582,13 @@ function mapCustomerRow(headers, row) {
     const v = row[i];
     obj[cleanKey] = v instanceof Date ? v.toISOString() : v;
   });
+  // Merge SalesRepEmail + AssignedSalesman so ownsAccount sees both
+  if (assignedSalesman) {
+    const base = salesRepEmail ? salesRepEmail.split(/[,;\s]+/).map(e => e.trim()).filter(Boolean) : [];
+    const extra = assignedSalesman.split(/[,;\s]+/).map(e => e.trim()).filter(Boolean);
+    extra.forEach(e => { if (!base.includes(e)) base.push(e); });
+    obj["SalesRep"] = base.join(", ");
+  }
   return obj;
 }
 
@@ -651,12 +661,19 @@ function assignCustomerToRep(ss, customerId, customerName, toEmail, toName, byEm
       const isMatch = (customerId && rowId === customerId.trim()) ||
                       (customerName && rowName === customerName.toLowerCase().trim());
       if (isMatch) {
-        if (repIdx !== -1) {
-          const existing = String(data[i][repIdx] || "").trim();
-          const emails = existing ? existing.split(/[,;\s]+/).map(e => e.trim().toLowerCase()).filter(Boolean) : [];
-          if (!emails.includes(toEmail.toLowerCase())) emails.push(toEmail.toLowerCase());
-          customerSheet.getRange(i + 1, repIdx + 1).setValue(emails.join(", "));
+        // Write to AssignedSalesman column (safe to write — no formula)
+        // Find or create the column
+        let assignedIdx = headers.findIndex(h => h === "assignedsalesman" || h === "assigned salesman");
+        if (assignedIdx === -1) {
+          // Add the column header
+          const lastCol = data[0].length + 1;
+          customerSheet.getRange(1, lastCol).setValue("AssignedSalesman");
+          assignedIdx = lastCol - 1;
         }
+        const existing = String(data[i][assignedIdx] || "").trim();
+        const emails = existing ? existing.split(/[,;\s]+/).map(e => e.trim().toLowerCase()).filter(Boolean) : [];
+        if (!emails.includes(toEmail.toLowerCase())) emails.push(toEmail.toLowerCase());
+        customerSheet.getRange(i + 1, assignedIdx + 1).setValue(emails.join(", "));
         if (repNameIdx !== -1 && toName) customerSheet.getRange(i + 1, repNameIdx + 1).setValue(toName);
         break;
       }
