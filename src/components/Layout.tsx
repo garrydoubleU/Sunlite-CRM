@@ -1,10 +1,10 @@
 import { type ReactNode, useState } from 'react';
-import { LayoutDashboard, Users, MessageSquare, Link2, LogOut, Bell, Search, RefreshCw, Menu, X, Mail, Settings } from 'lucide-react';
+import { LayoutDashboard, Users, MessageSquare, Link2, LogOut, Bell, Search, RefreshCw, Menu, X, Mail, Settings, BarChart2 } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import { useCustomerStore } from '../store/customerStore';
 import NotificationCenter from './NotificationCenter';
 
-type Page = 'dashboard' | 'customers' | 'activity' | 'quicklinks' | 'settings';
+type Page = 'dashboard' | 'customers' | 'activity' | 'quicklinks' | 'settings' | 'reports';
 
 interface LayoutProps {
   children: ReactNode;
@@ -12,7 +12,7 @@ interface LayoutProps {
   onNavigate: (page: Page) => void;
 }
 
-const NAV_ITEMS = [
+const BASE_NAV_ITEMS = [
   { id: 'dashboard' as Page, label: 'Dashboard', icon: LayoutDashboard },
   { id: 'customers' as Page, label: 'Customers', icon: Users },
   { id: 'activity' as Page, label: 'Activity', icon: MessageSquare },
@@ -22,6 +22,14 @@ const NAV_ITEMS = [
 
 export default function Layout({ children, currentPage, onNavigate }: LayoutProps) {
   const { currentUser, logout } = useAuthStore();
+
+  const NAV_ITEMS = currentUser?.role === 'owner'
+    ? [
+        BASE_NAV_ITEMS[0],
+        { id: 'reports' as Page, label: 'Reports', icon: BarChart2 },
+        ...BASE_NAV_ITEMS.slice(1),
+      ]
+    : BASE_NAV_ITEMS;
   const { isSyncing, triggerSync, syncEmails, isSyncingEmails } = useCustomerStore();
   const [showNotifications, setShowNotifications] = useState(false);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
@@ -144,7 +152,8 @@ export default function Layout({ children, currentPage, onNavigate }: LayoutProp
               <Menu size={22} />
             </button>
             <span className="text-xs font-bold text-gray-400 uppercase tracking-[0.15em]">
-              {NAV_ITEMS.find(n => n.id === currentPage)?.label === 'Activity' ? 'Activity Feed'
+              {currentPage === 'activity' ? 'Activity Feed'
+                : currentPage === 'reports' ? 'Reports'
                 : NAV_ITEMS.find(n => n.id === currentPage)?.label}
             </span>
           </div>
