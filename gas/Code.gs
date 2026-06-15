@@ -1,6 +1,6 @@
 /**
  * GOOGLE APPS SCRIPT — SUNLITE CRM HUB
- * Version 3.4 — Skip CS rep's own email when picking rep to notify (handles accounts where CS email is listed first)
+ * Version 3.5 — Notify rep by matching Salesperson Name → Users sheet email (not Sales Rep Email column)
  *
  * Handles: login, customers (own + all), logs (read/save/delete), users,
  *          quick links, email send, gmail sync, customer-email update,
@@ -185,16 +185,11 @@ function doGet(e) {
       // C. If notifyRep=true, email the assigned rep and write to CSHandoffs sheet
       const notifyRep = (e.parameter.notifyRep || "").toLowerCase() === "true";
       if (notifyRep) {
-        // Find the assigned rep email from the Customers sheet
-        const assignedRepIdx = custHeaders.findIndex(h => {
-          const ns = h.replace(/\s+/g, '');
-          return ns === "salesrepemail" || ns === "salesrep" || ns === "remail" || ns.includes("salesrep");
-        });
+        // Find the salesperson name from the Customers sheet, then look up their email in Users
         const repNameColIdx = custHeaders.findIndex(h => {
           const ns = h.replace(/\s+/g, '');
           return ns === "salespersonname" || ns === "repname" || ns.includes("salesperson");
         });
-        let repEmail = "";
         let repDisplayName = "";
         for (let i = 1; i < custData.length; i++) {
           const rowId = custData[i][idIdx]?.toString().trim();
@@ -202,23 +197,37 @@ function doGet(e) {
           const isMatch = (customerID && rowId === customerID.trim()) ||
                           (customerName && rowName === customerName.toLowerCase().trim());
           if (isMatch) {
-            repEmail = assignedRepIdx !== -1 ? String(custData[i][assignedRepIdx] || "").trim() : "";
-            repDisplayName = repNameColIdx !== -1 ? String(custData[i][repNameColIdx] || "") : repEmail;
+            repDisplayName = repNameColIdx !== -1 ? String(custData[i][repNameColIdx] || "").trim() : "";
             break;
           }
         }
-        if (repEmail) {
+        // Match salesperson name → email via Users sheet
+        let firstRepEmail = "";
+        let firstRepName = repDisplayName;
+        if (repDisplayName) {
+          const userSheet = ss.getSheetByName("Users");
+          if (userSheet) {
+            const userData = userSheet.getDataRange().getValues();
+            const uHeaders = userData[0].map(h => h.toString().toLowerCase().trim());
+            const uEmailIdx = uHeaders.indexOf("email");
+            const uNameIdx = uHeaders.indexOf("username");
+            for (let i = 1; i < userData.length; i++) {
+              const uName = String(userData[i][uNameIdx] || "").trim().toLowerCase();
+              if (uName && repDisplayName.toLowerCase().includes(uName) || uName.includes(repDisplayName.toLowerCase())) {
+                firstRepEmail = String(userData[i][uEmailIdx] || "").toLowerCase().trim();
+                firstRepName = String(userData[i][uNameIdx] || "").trim();
+                break;
+              }
+            }
+          }
+        }
+        if (firstRepEmail) {
           const csRepName = repName || userEmail;
           const activityLabel = {
             call: "Phone Call", visit: "Field Visit", email: "Email", note: "Note"
-          }[logType] || "Activity";
+          }[cleanType] || logType || "Activity";
           const now = new Date();
           const dateStr = Utilities.formatDate(now, Session.getScriptTimeZone(), "MMM d, yyyy 'at' h:mm a");
-          // Skip the CS rep's own email — find the first email that isn't the person logging the note
-          const repEmailList = repEmail.split(/[,;\s]+/).map(e => e.trim().toLowerCase()).filter(Boolean);
-          const firstRepEmail = repEmailList.find(e => e !== userEmail) || repEmailList[0] || "";
-          if (!firstRepEmail) { return createJsonResponse({ status: "Success" }); }
-          const firstRepName = repDisplayName ? repDisplayName.split(/[,;\s]+/)[0] : firstRepEmail;
           const emailBody = [
             "Hi " + firstRepName + ",",
             "",
