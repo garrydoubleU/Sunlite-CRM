@@ -15,12 +15,16 @@ interface SettingsState {
   deleteSignature: (id: string) => void;
   setDefault: (id: string) => void;
   getDefault: () => Signature | null;
+  // Which rep names are visible on the owner dashboard (null = show all)
+  ownerDashboardReps: string[] | null;
+  setOwnerDashboardReps: (reps: string[] | null) => void;
 }
 
 export const useSettingsStore = create<SettingsState>()(
   persist(
     (set, get) => ({
       signatures: [],
+      ownerDashboardReps: null,
 
       addSignature: (name, body) => {
         const isFirst = get().signatures.length === 0;
@@ -42,7 +46,6 @@ export const useSettingsStore = create<SettingsState>()(
       deleteSignature: (id) =>
         set(s => {
           const remaining = s.signatures.filter(sig => sig.id !== id);
-          // If we deleted the default, promote the first remaining one
           if (remaining.length > 0 && !remaining.some(sig => sig.isDefault)) {
             remaining[0].isDefault = true;
           }
@@ -58,6 +61,8 @@ export const useSettingsStore = create<SettingsState>()(
         const sigs = get().signatures;
         return sigs.find(s => s.isDefault) ?? sigs[0] ?? null;
       },
+
+      setOwnerDashboardReps: (reps) => set({ ownerDashboardReps: reps }),
     }),
     { name: 'sunlite-settings' }
   )
