@@ -397,6 +397,26 @@ function doGet(e) {
         Date: new Date(),
         Status: "pending"
       });
+      // Email admins
+      const requesterName = e.parameter.requesterName || e.parameter.requesterEmail || "A rep";
+      const customerName2 = e.parameter.customerName || e.parameter.customerId || "an account";
+      const body = [
+        requesterName + " has requested access to: " + customerName2,
+        "",
+        "Requester: " + (e.parameter.requesterEmail || ""),
+        "Account: " + customerName2,
+        "",
+        "Log in to the admin dashboard to grant or deny access."
+      ].join("\n");
+      try {
+        MailApp.sendEmail(
+          "garry@sunshinelighting.com,cweber@sunshinelighting.com",
+          "Access Request — " + customerName2,
+          body
+        );
+      } catch(mailErr) {
+        Logger.log("Access request email failed: " + mailErr.toString());
+      }
       return createJsonResponse({ status: "Success", id: id });
     }
 
