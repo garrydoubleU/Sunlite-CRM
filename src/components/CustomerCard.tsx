@@ -24,9 +24,10 @@ const FREQ_COLORS: Record<string, string> = {
 export default function CustomerCard({ customer, onOpenModal }: CustomerCardProps) {
   const { currentUser } = useAuthStore();
   const showRevenue = canViewRevenue(currentUser?.role ?? 'field_sales');
+  const isOwner = currentUser?.role === 'owner';
 
   const daysSinceContact = safeDaysSince(customer.lastContactDate);
-  const isUntouched = daysSinceContact >= 30;
+  const isUntouched = !isOwner && daysSinceContact >= 30;
 
   return (
     <div
