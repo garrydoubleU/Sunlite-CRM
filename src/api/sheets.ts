@@ -281,12 +281,12 @@ export async function saveActivity(
   activity: GASActivity,
   customerName: string,
   userEmail: string
-): Promise<void> {
+): Promise<Record<string, unknown>> {
   const logTypeLabel: Record<string, string> = {
     call: 'Phone Call', visit: 'Visit', email: 'Email', note: 'Note',
   };
   const label = logTypeLabel[activity.type] ?? 'Note';
-  await gasPost({
+  return gasPost<Record<string, unknown>>({
     action: 'saveLog',
     // clean schema
     id: activity.id,

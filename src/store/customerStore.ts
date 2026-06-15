@@ -77,7 +77,7 @@ interface CustomerState {
   // Customer field updates
   updateCustomer: (id: string, updates: Partial<Customer>) => void;
   // Activity CRUD — optimistic UI + background GAS write
-  addActivity: (activity: Activity) => void;
+  addActivity: (activity: Activity) => Promise<Record<string, unknown>>;
   updateActivity: (id: string, updates: Partial<Activity>) => void;
   deleteActivity: (id: string) => void;
   getActivitiesForCustomer: (customerId: string) => Activity[];
@@ -210,7 +210,7 @@ export const useCustomerStore = create<CustomerState>((set, get) => ({
     }
   },
 
-  addActivity: (activity: Activity) => {
+  addActivity: (activity: Activity): Promise<Record<string, unknown>> => {
     // Optimistic update — show immediately + update lastContactDate so dashboard re-sorts instantly
     const today = new Date().toISOString().split('T')[0];
     set(state => ({
@@ -225,15 +225,17 @@ export const useCustomerStore = create<CustomerState>((set, get) => ({
     if (isGASConfigured()) {
       const { currentUser } = useAuthStore.getState();
       const customer = get().customers.find(c => c.id === activity.customerId);
-      gasSave(
+      return gasSave(
         activity as GASActivity,
         customer?.name ?? activity.customerId,
         currentUser?.email ?? ''
       ).catch(err => {
         console.error('[GAS] saveActivity failed:', err);
         set(state => ({ activities: state.activities.filter(a => a.id !== activity.id) }));
+        return { error: String(err) };
       });
     }
+    return Promise.resolve({ status: 'local-only' });
   },
 
   updateActivity: (id, updates) => {

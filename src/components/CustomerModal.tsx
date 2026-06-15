@@ -104,6 +104,7 @@ export default function CustomerModal({ customer, onClose }: CustomerModalProps)
   const [logType, setLogType] = useState<ActivityType | ''>('');
   const [followUp, setFollowUp] = useState('');
   const [notifyRep, setNotifyRep] = useState(false);
+  const [gasDebug, setGasDebug] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
 
@@ -210,7 +211,8 @@ export default function CustomerModal({ customer, onClose }: CustomerModalProps)
     const effectiveType: ActivityType | '' = restricted ? 'note' : logType;
     if (!notes.trim() || !effectiveType) return;
     setSaving(true);
-    addActivity({
+    setGasDebug(null);
+    const result = await addActivity({
       id: `a_${Date.now()}`,
       customerId: customer.id,
       type: effectiveType,
@@ -221,9 +223,9 @@ export default function CustomerModal({ customer, onClose }: CustomerModalProps)
       notifyRep,
       ...(followUp ? { followUpDate: new Date(followUp).toISOString() } : {}),
     });
-    await new Promise(r => setTimeout(r, 600));
     setSaving(false);
     setSaved(true);
+    if (notifyRep) setGasDebug(JSON.stringify(result, null, 2));
     setNotes('');
     setLogType('');
     setFollowUp('');
@@ -610,6 +612,13 @@ export default function CustomerModal({ customer, onClose }: CustomerModalProps)
                 >
                   {saved ? '✓ Saved' : saving ? 'Saving…' : !restricted && !logType && notes.trim() ? 'Pick a type to save' : 'Save Activity'}
                 </button>
+                {gasDebug && (
+                  <div className="mt-2 rounded-lg border border-gray-200 bg-gray-50 p-2">
+                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">GAS Response (notify debug)</p>
+                    <pre className="text-[10px] text-gray-600 whitespace-pre-wrap break-all">{gasDebug}</pre>
+                    <button onClick={() => setGasDebug(null)} className="text-[10px] text-gray-400 hover:text-gray-600 mt-1">dismiss</button>
+                  </div>
+                )}
               </div>
 
               {/* Divider — history hidden for restricted reps */}
