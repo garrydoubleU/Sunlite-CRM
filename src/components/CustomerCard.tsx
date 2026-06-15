@@ -1,7 +1,4 @@
-import { useState } from 'react';
-import { ChevronDown, ChevronUp, MapPin, Phone, Mail, Package, Calendar } from 'lucide-react';
 import type { Customer } from '../types';
-import ActivityTimeline from './ActivityTimeline';
 import { canViewRevenue } from '../utils/roleGate';
 import { useAuthStore } from '../store/authStore';
 import { safeFormat, safeDaysSince } from '../utils/scheduler';
@@ -25,7 +22,6 @@ const FREQ_COLORS: Record<string, string> = {
 };
 
 export default function CustomerCard({ customer, onOpenModal }: CustomerCardProps) {
-  const [expanded, setExpanded] = useState(false);
   const { currentUser } = useAuthStore();
   const showRevenue = canViewRevenue(currentUser?.role ?? 'field_sales');
 
@@ -33,11 +29,13 @@ export default function CustomerCard({ customer, onOpenModal }: CustomerCardProp
   const isUntouched = daysSinceContact >= 30;
 
   return (
-    <div className={`bg-white rounded-2xl shadow-sm border transition-all duration-200 ${
-      isUntouched ? 'border-red-200' : 'border-gray-100'
-    } ${expanded ? 'ring-1 ring-amber-400' : ''}`}>
-      {/* Tappable card body — expands inline detail */}
-      <div className="p-4 cursor-pointer active:bg-gray-50 transition-colors" onClick={() => setExpanded(!expanded)}>
+    <div
+      onClick={onOpenModal}
+      className={`bg-white rounded-2xl shadow-sm border transition-all duration-200 ${
+        isUntouched ? 'border-red-200' : 'border-gray-100'
+      } ${onOpenModal ? 'cursor-pointer hover:shadow-md hover:border-amber-300' : ''}`}
+    >
+      <div className="p-4">
         {/* Header */}
         <div className="flex items-start justify-between mb-3">
           <div className="flex-1 min-w-0">
@@ -99,51 +97,7 @@ export default function CustomerCard({ customer, onOpenModal }: CustomerCardProp
             </div>
           )}
         </div>
-
-        {/* Expand hint */}
-        <div className="flex items-center justify-between mt-2">
-          {onOpenModal && (
-            <button
-              onClick={e => { e.stopPropagation(); onOpenModal(); }}
-              className="text-[10px] font-bold text-amber-600 hover:underline"
-            >
-              Open Record →
-            </button>
-          )}
-          <span className="ml-auto text-[10px] text-gray-300 flex items-center gap-0.5">
-            {expanded ? <><ChevronUp size={11} /> less</> : <><ChevronDown size={11} /> more</>}
-          </span>
-        </div>
       </div>
-
-      {/* Expanded detail */}
-      {expanded && (
-        <div className="px-4 pb-4 border-t border-gray-50">
-          <div className="pt-3 space-y-2">
-            <div className="flex items-center gap-2 text-xs text-gray-600">
-              <MapPin size={12} className="text-gray-400" />
-              {customer.billingAddress}
-            </div>
-            <div className="flex items-center gap-2 text-xs text-gray-600">
-              <Phone size={12} className="text-gray-400" />
-              {customer.phone}
-            </div>
-            <div className="flex items-center gap-2 text-xs text-gray-600">
-              <Mail size={12} className="text-gray-400" />
-              {customer.email}
-            </div>
-            <div className="flex items-center gap-2 text-xs text-gray-600">
-              <Package size={12} className="text-gray-400" />
-              {customer.openOrderCount} open orders
-            </div>
-            <div className="flex items-center gap-2 text-xs text-gray-600">
-              <Calendar size={12} className="text-gray-400" />
-              Last contact: {safeFormat(customer.lastContactDate, 'MMMM d, yyyy')}
-            </div>
-          </div>
-          <ActivityTimeline customerId={customer.id} />
-        </div>
-      )}
     </div>
   );
 }
