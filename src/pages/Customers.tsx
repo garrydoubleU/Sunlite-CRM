@@ -20,9 +20,9 @@ export default function Customers() {
     // When searching, reach across the full company directory so reps can find
     // accounts outside their own book (they open read-only). Otherwise show their book.
     const source = search.trim() ? directory : customers;
-    return source.filter(c => {
-      if (search) {
-        const q = search.toLowerCase();
+    const q = search.toLowerCase().trim();
+    const results = source.filter(c => {
+      if (q) {
         if (!c.name.toLowerCase().includes(q) && !c.id.toLowerCase().includes(q) && !c.territory.toLowerCase().includes(q)) return false;
       }
       if (tierFilter !== 'all' && c.priorityTier !== parseInt(tierFilter)) return false;
@@ -31,6 +31,15 @@ export default function Customers() {
       if (statusFilter === 'inactive' && c.activeStatus) return false;
       return true;
     });
+    // When searching, sort exact ID/name matches first
+    if (q) {
+      results.sort((a, b) => {
+        const aExact = a.id.toLowerCase() === q || a.name.toLowerCase() === q ? 0 : 1;
+        const bExact = b.id.toLowerCase() === q || b.name.toLowerCase() === q ? 0 : 1;
+        return aExact - bExact;
+      });
+    }
+    return results;
   }, [customers, directory, search, tierFilter, freqFilter, statusFilter]);
 
   function clearFilters() {
