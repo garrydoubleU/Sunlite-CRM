@@ -131,7 +131,7 @@ function doGet(e) {
       const row = logHeaders.map(h => {
         if (h === "id")                                                    return id;
         if (h === "timestamp" || h === "date")                             return timestamp;
-        if (h === "useremail" || h === "email" || h === "remail")          return userEmail;
+        if (h === "useremail" || h === "email" || h === "remail" || h === "salesrepemail") return userEmail;
         if (h === "repname" || h === "salesrep" || h === "rep" || h === "salesperson") return repName || userEmail;
         if (h === "username" || h === "user" || h === "loggedby")          return repName || userEmail;
         if (h === "customername" || h === "customer")                      return customerName;

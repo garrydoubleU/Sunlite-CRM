@@ -237,7 +237,7 @@ function mapRawLog(raw: Record<string, unknown>, idx: number): GASActivity {
   // Try every common column name for the rep/user field.
   // As a final fallback, scan all values in the row for an email address —
   // this handles whatever the customer named their Log sheet column.
-  let repName = pick('repname', 'username', 'user', 'useremail', 'rep', 'salesrep', 'email', 'loggedby', 'loggedbyemail');
+  let repName = pick('repname', 'username', 'user', 'useremail', 'salesrepemail', 'rep', 'salesrep', 'email', 'loggedby', 'loggedbyemail');
   if (!repName) {
     for (const v of Object.values(r)) {
       const s = String(v ?? '').trim();
