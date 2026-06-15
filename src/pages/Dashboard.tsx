@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { AlertTriangle, Calendar, TrendingUp, Clock } from 'lucide-react';
+import { Clock } from 'lucide-react';
 import { useCustomerStore } from '../store/customerStore';
 import { useAuthStore } from '../store/authStore';
 import { calculateNextVisit, getDaysUntil, getDueDateColor, safeDaysSince, safeFormat } from '../utils/scheduler';
@@ -32,9 +32,6 @@ export default function Dashboard() {
     .filter(c => c.activeStatus && safeDaysSince(c.lastContactDate) >= 30)
     .sort((a, b) => safeDaysSince(b.lastContactDate) - safeDaysSince(a.lastContactDate));
 
-  const tierCounts = { 1: 0, 2: 0, 3: 0, 4: 0 } as Record<number, number>;
-  customers.forEach(c => { tierCounts[c.priorityTier]++; });
-
   const recentActivities = [...activities]
     .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
     .slice(0, 8);
@@ -60,73 +57,28 @@ export default function Dashboard() {
     .slice(0, 6);
 
 
+  const today = new Date();
+  const dateLabel = today.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+
   // ── Render: Field Sales / Admin ───────────────────────────────
   return (
     <div className="space-y-6">
       <AssignmentAlert />
-      {/* Stat cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
-          <div className="flex items-center justify-between mb-3">
-            <div className="w-10 h-10 bg-red-100 rounded-xl flex items-center justify-center">
-              <AlertTriangle size={20} className="text-red-500" />
-            </div>
-            <span className="text-[10px] font-bold bg-red-500 text-white px-2.5 py-1 rounded-full uppercase tracking-wide">High Priority</span>
-          </div>
-          <p className="text-4xl font-black text-gray-900">{untouchedCustomers.length}</p>
-          <p className="text-xs font-bold text-gray-500 uppercase tracking-widest mt-1">Untouched L1–L4s</p>
-          <p className="text-xs text-gray-400 mt-1">No activity in 30+ days</p>
-          {untouchedCustomers.length > 0 && (
-            <div className="mt-3 space-y-1">
-              {untouchedCustomers.slice(0, 3).map(c => (
-                <div key={c.id} className="flex items-center justify-between text-xs">
-                  <span className="text-gray-600 truncate">{c.name}</span>
-                  <span className="text-red-500 font-semibold ml-2 flex-shrink-0">{safeDaysSince(c.lastContactDate)}d</span>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
 
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
-          <div className="flex items-center justify-between mb-3">
-            <div className="w-10 h-10 bg-amber-100 rounded-xl flex items-center justify-center">
-              <Calendar size={20} className="text-amber-600" />
-            </div>
-            <span className="text-[10px] font-bold bg-amber-500 text-white px-2.5 py-1 rounded-full uppercase tracking-wide">Today</span>
-          </div>
-          <p className="text-4xl font-black text-gray-900">{followUpsToday.length}</p>
-          <p className="text-xs font-bold text-gray-500 uppercase tracking-widest mt-1">Visits Due Today</p>
-          <p className="text-xs text-gray-400 mt-1">Customers due for a field visit</p>
-          {followUpsToday.length > 0 && (
-            <div className="mt-3 space-y-1">
-              {followUpsToday.slice(0, 3).map(c => (
-                <div key={c.id} className="flex items-center gap-2 text-xs">
-                  <div className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${c.priorityTier === 1 ? 'bg-red-100 text-red-600' : 'bg-amber-100 text-amber-600'}`}>
-                    T{c.priorityTier}
-                  </div>
-                  <span className="text-gray-600 truncate">{c.name}</span>
-                </div>
-              ))}
-            </div>
-          )}
+      {/* Clean header strip */}
+      <div className="flex items-baseline justify-between">
+        <div>
+          <p className="text-xl font-bold text-gray-900">Good morning, {currentUser?.name?.split(' ')[0]}</p>
+          <p className="text-sm text-gray-400 mt-0.5">{dateLabel}</p>
         </div>
-
-        <div className="bg-[#0F2A4A] rounded-2xl shadow-sm p-5 text-white">
-          <div className="flex items-center justify-between mb-3">
-            <div className="w-10 h-10 bg-white/10 rounded-xl flex items-center justify-center">
-              <TrendingUp size={20} className="text-amber-400" />
-            </div>
-            <span className="text-[10px] font-bold bg-amber-500 text-white px-2.5 py-1 rounded-full uppercase tracking-wide">Weekly</span>
+        <div className="flex gap-6 text-right">
+          <div>
+            <p className="text-2xl font-black text-gray-900">{followUpsToday.length}</p>
+            <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest">Due today</p>
           </div>
-          <p className="text-xs font-bold text-white/60 uppercase tracking-widest mb-3">Portfolio Tier Health</p>
-          <div className="grid grid-cols-2 gap-2">
-            {([1, 2, 3, 4] as const).map(tier => (
-              <div key={tier} className="bg-white/10 rounded-xl p-3">
-                <p className="text-2xl font-black text-white">{tierCounts[tier]}</p>
-                <p className="text-[10px] text-white/50 uppercase tracking-wide">Tier {tier}</p>
-              </div>
-            ))}
+          <div>
+            <p className="text-2xl font-black text-gray-900">{untouchedCustomers.length}</p>
+            <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest">Overdue</p>
           </div>
         </div>
       </div>

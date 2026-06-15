@@ -7,7 +7,7 @@ import { useCustomerStore, ownsAccount } from '../store/customerStore';
 import { useAuthStore } from '../store/authStore';
 import { calculateNextVisit, getDueDateLabel, getDueDateColor, safeFormat, safeDaysSince, parseEmailSummary, looksLikeEmail } from '../utils/scheduler';
 
-import { sendEmail, isGASConfigured, updateCustomerEmail, fetchUsers } from '../api/sheets';
+import { sendEmail, isGASConfigured, updateCustomerEmail, fetchUsers, addContactToSheet } from '../api/sheets';
 import { sendGmailMessage } from '../api/gmail';
 import { useGmailStore } from '../store/gmailStore';
 import { useSettingsStore } from '../store/settingsStore';
@@ -132,6 +132,17 @@ export default function CustomerModal({ customer, onClose }: CustomerModalProps)
     const next = [...contacts.filter(c => c.email !== entry.email), entry];
     setContacts(next);
     await persistContacts(next);
+    if (isGASConfigured()) {
+      const { currentUser } = useAuthStore.getState();
+      addContactToSheet({
+        customerName: customer.name,
+        firstName: entry.firstName,
+        lastName: entry.lastName,
+        position: entry.position,
+        contactEmail: entry.email,
+        addedBy: currentUser?.email ?? '',
+      }).catch(() => {});
+    }
     setSavingContact(false);
     setNewContact({ email: '', firstName: '', lastName: '', position: '' });
     setAddingContact(false);

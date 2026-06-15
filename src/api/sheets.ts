@@ -373,6 +373,17 @@ export async function updateCustomerEmail(customerId: string, email: string): Pr
   await gasPost({ action: 'updateCustomerEmail', customerId, email });
 }
 
+export async function addContactToSheet(params: {
+  customerName: string;
+  firstName?: string;
+  lastName?: string;
+  position?: string;
+  contactEmail: string;
+  addedBy: string;
+}): Promise<void> {
+  await gasPost({ action: 'addContact', ...params });
+}
+
 // ── Account assignment & access requests ──────────────────────
 
 import type { Assignment, AccessRequest } from '../types';

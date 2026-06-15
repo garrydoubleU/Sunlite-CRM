@@ -370,6 +370,46 @@ function doGet(e) {
       return createJsonResponse({ status: "Success" });
     }
 
+    // ───────────────────────────────────────── 16. ADD CONTACT (new person at an account)
+    if (action === "addContact") {
+      const customerName = e.parameter.customerName || "";
+      const firstName    = e.parameter.firstName || "";
+      const lastName     = e.parameter.lastName || "";
+      const position     = e.parameter.position || "";
+      const contactEmail = e.parameter.contactEmail || "";
+      const addedBy      = e.parameter.addedBy || userEmail;
+      const addedDate    = new Date().toLocaleDateString("en-US");
+
+      // Write to Contacts sheet
+      const contactSheet = getOrCreateSheet(ss, "Contacts",
+        ["ID", "CustomerName", "FirstName", "LastName", "Position", "Email", "AddedBy", "Date"]);
+      contactSheet.appendRow([
+        Utilities.getUuid(),
+        customerName, firstName, lastName, position, contactEmail, addedBy, addedDate
+      ]);
+
+      // Email Garry
+      const fullName = [firstName, lastName].filter(Boolean).join(" ") || contactEmail;
+      const body = [
+        "A new contact was added to " + customerName + ":",
+        "",
+        "Name: "     + fullName,
+        "Position: " + (position || "—"),
+        "Email: "    + (contactEmail || "—"),
+        "",
+        "Added by: " + addedBy,
+        "Date: "     + addedDate,
+      ].join("\n");
+      try {
+        MailApp.sendEmail("garry@sunshinelighting.com",
+          "New Contact Added — " + customerName + ": " + fullName, body);
+      } catch(mailErr) {
+        Logger.log("Email send failed: " + mailErr.toString());
+      }
+
+      return createJsonResponse({ status: "ok" });
+    }
+
     return createJsonResponse({ error: "Action '" + action + "' not handled." });
 
   } catch (err) {
