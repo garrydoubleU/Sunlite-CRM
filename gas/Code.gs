@@ -1,6 +1,6 @@
 /**
  * GOOGLE APPS SCRIPT — SUNLITE CRM HUB
- * Version 3.0 — clean consolidated build
+ * Version 3.1 — AssignedSalesman column filter; improved CS→rep email with activity type; ActivityType stored in CSHandoffs
  *
  * Handles: login, customers (own + all), logs (read/save/delete), users,
  *          quick links, email send, gmail sync, customer-email update,
