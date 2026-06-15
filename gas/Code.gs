@@ -1,6 +1,6 @@
 /**
  * GOOGLE APPS SCRIPT — SUNLITE CRM HUB
- * Version 3.7 — CS Tasks: CSEmail column, getCSHandoffsByCSEmail, nudgeRep, ackNotes; simplified rep email
+ * Version 3.8 — Fix LastContactDate mapping in mapCustomerRow so queue logic uses real last-contact date
  *
  * Handles: login, customers (own + all), logs (read/save/delete), users,
  *          quick links, email send, gmail sync, customer-email update,
@@ -664,6 +664,7 @@ function mapCustomerRow(headers, row) {
     if (low === "assignedsalesman" || low === "assigned salesman") { assignedSalesman = String(row[i] || "").trim(); }
     if (low === "salesperson name") key = "SalespersonName";
     if (low === "last order date") key = "LastOrderDate";
+    if (low === "last contact date" || low === "lastcontactdate" || low.includes("lastcontact")) key = "LastContactDate";
     if (low === "visit frequency") key = "VisitFrequency";
     if (low === "visit start date") key = "VisitStartDate";
     const cleanKey = key.replace(/\s+/g, '_');

@@ -163,7 +163,7 @@ function mapRawCustomer(r: Record<string, unknown>): GASCustomer {
     priorityTier: tier as 1 | 2 | 3 | 4,
     customerClass: String(r.Category ?? r.CustomerClass ?? r.Type ?? ''),
     visitFrequency: freq,
-    lastContactDate: safeDate(r.LastOrderDate ?? r.LastContact ?? r.VisitStartDate),
+    lastContactDate: safeDate(r.LastContactDate ?? r.LastContact ?? r.LastOrderDate ?? r.VisitStartDate),
     activeStatus: String(r.Status ?? r.status ?? 'active').toLowerCase() !== 'inactive',
     openOrderCount: Number(r.OpenOrders ?? r.openOrders ?? 0),
     revenue,
