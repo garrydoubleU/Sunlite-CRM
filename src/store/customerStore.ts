@@ -149,20 +149,24 @@ export const useCustomerStore = create<CustomerState>((set, get) => ({
       };
 
       const customers = rawCustomers.map(gasCustomerToLocal);
-      set({
+      set(state => ({
         customers,
-        directory: customers,
+        // Owners/admins already see everyone, so customers === directory.
+        // Reps: keep whatever full directory we already have (don't clobber
+        // it back down to their own book while the background fetch below
+        // re-populates it — that's what made search flaky).
+        directory: seesAll ? customers : (state.directory.length > 0 ? state.directory : customers),
         emailToName,
         activities: rawActivities.map(a => ({ ...gasActivityToLocal(a), repName: enrichRepName(a.repName) })),
         lastSync: new Date(),
         isSyncing: false,
-      });
+      }));
 
       // Reps: load the full directory in the background so search reaches
       // accounts outside their book, plus any assignments addressed to them.
       if (!seesAll && email) {
         fetchAllCustomers()
-          .then(all => set({ directory: all.map(gasCustomerToLocal) }))
+          .then(all => { if (all.length > 0) set({ directory: all.map(gasCustomerToLocal) }); })
           .catch(() => {});
         fetchAssignments(email)
           .then(assignments => set({ assignments }))

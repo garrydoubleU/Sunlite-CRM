@@ -1,5 +1,5 @@
 import { type ReactNode, useState } from 'react';
-import { LayoutDashboard, Users, MessageSquare, Link2, LogOut, Bell, Search, RefreshCw, Menu, X, Mail, Settings, BarChart2 } from 'lucide-react';
+import { LayoutDashboard, Users, MessageSquare, Link2, LogOut, Bell, RefreshCw, Menu, X, Mail, Settings, BarChart2 } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import { useCustomerStore } from '../store/customerStore';
 import NotificationCenter from './NotificationCenter';
@@ -159,13 +159,6 @@ export default function Layout({ children, currentPage, onNavigate }: LayoutProp
           </div>
 
           <div className="flex items-center gap-2">
-            {/* Search — hidden on small mobile */}
-            <div className="hidden sm:flex items-center gap-2 bg-gray-50 rounded-xl px-3 py-2 w-48 md:w-64">
-              <Search size={14} className="text-gray-400" />
-              <input placeholder="Search accounts..."
-                className="bg-transparent text-sm text-gray-600 placeholder-gray-400 outline-none flex-1 min-w-0" />
-            </div>
-
             {/* Sync data */}
             <button onClick={triggerSync} title="Sync customers & data"
               className={`p-2 rounded-lg transition-all ${isSyncing ? 'text-amber-500' : 'text-gray-400 hover:bg-gray-50'}`}>
