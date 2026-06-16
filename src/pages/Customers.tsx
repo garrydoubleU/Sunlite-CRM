@@ -129,10 +129,9 @@ export default function Customers() {
 
       {/* Results count */}
       <div className="flex items-center justify-between mb-4">
-        <p className={`text-xs font-bold uppercase tracking-wider transition-opacity ${isStale ? 'text-gray-300' : 'text-gray-500'}`}>
-          {filtered.length} account{filtered.length !== 1 ? 's' : ''}
+        <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">
+          {isStale ? '' : `${filtered.length} account${filtered.length !== 1 ? 's' : ''}`}
         </p>
-        {isStale && <p className="text-[10px] text-gray-400">Filtering…</p>}
       </div>
 
       {/* Customer grid */}
@@ -144,8 +143,8 @@ export default function Customers() {
           </button>
         </div>
       ) : (
-        <div className={`grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 transition-opacity ${isStale ? 'opacity-50' : 'opacity-100'}`}>
-          {filtered.map(c => (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {!isStale && filtered.map(c => (
             <CustomerCard key={c.id} customer={c} onOpenModal={() => setSelectedCustomer(c)} />
           ))}
         </div>
