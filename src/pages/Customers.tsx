@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useDeferredValue } from 'react';
 import { Search, X } from 'lucide-react';
 import { useCustomerStore } from '../store/customerStore';
 import CustomerCard from '../components/CustomerCard';
@@ -16,11 +16,14 @@ export default function Customers() {
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
 
+  const deferredSearch = useDeferredValue(search);
+
+  // Always use directory (full company) if available, else fall back to customers.
+  // This eliminates the source-switching race where the grid and count could briefly disagree.
+  const source = directory.length > 0 ? directory : customers;
+
   const filtered = useMemo(() => {
-    // When searching, reach across the full company directory so reps can find
-    // accounts outside their own book (they open read-only). Otherwise show their book.
-    const source = search.trim() ? directory : customers;
-    const q = search.toLowerCase().trim();
+    const q = deferredSearch.toLowerCase().trim();
     const results = source.filter(c => {
       if (q) {
         if (!c.name.toLowerCase().includes(q) && !c.id.toLowerCase().includes(q) && !c.territory.toLowerCase().includes(q)) return false;
@@ -31,7 +34,6 @@ export default function Customers() {
       if (statusFilter === 'inactive' && c.activeStatus) return false;
       return true;
     });
-    // When searching, sort exact ID/name matches first
     if (q) {
       results.sort((a, b) => {
         const aExact = a.id.toLowerCase() === q || a.name.toLowerCase() === q ? 0 : 1;
@@ -40,7 +42,10 @@ export default function Customers() {
       });
     }
     return results;
-  }, [customers, directory, search, tierFilter, freqFilter, statusFilter]);
+  }, [source, deferredSearch, tierFilter, freqFilter, statusFilter]);
+
+  // When search is active but directory hasn't loaded yet, show a loading hint
+  const isStale = search !== deferredSearch;
 
   function clearFilters() {
     setSearch('');
@@ -124,9 +129,10 @@ export default function Customers() {
 
       {/* Results count */}
       <div className="flex items-center justify-between mb-4">
-        <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">
+        <p className={`text-xs font-bold uppercase tracking-wider transition-opacity ${isStale ? 'text-gray-300' : 'text-gray-500'}`}>
           {filtered.length} account{filtered.length !== 1 ? 's' : ''}
         </p>
+        {isStale && <p className="text-[10px] text-gray-400">Filtering…</p>}
       </div>
 
       {/* Customer grid */}
@@ -138,7 +144,7 @@ export default function Customers() {
           </button>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className={`grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 transition-opacity ${isStale ? 'opacity-50' : 'opacity-100'}`}>
           {filtered.map(c => (
             <CustomerCard key={c.id} customer={c} onOpenModal={() => setSelectedCustomer(c)} />
           ))}
