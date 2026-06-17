@@ -21,12 +21,14 @@ function CallerCard({
   followUpDate,
   onOpen,
   isFollowUp,
+  isContacted,
 }: {
   customer: Customer;
   daysAgo: number;
   followUpDate?: string;
   onOpen: () => void;
   isFollowUp: boolean;
+  isContacted?: boolean;
 }) {
   const tier = TIER_STYLE[customer.priorityTier] ?? TIER_STYLE[5];
   const daysUntilFollowUp = followUpDate
@@ -39,6 +41,8 @@ function CallerCard({
       className={`flex items-center gap-3 p-3.5 rounded-xl border cursor-pointer transition-all active:scale-[0.98] ${
         isFollowUp
           ? 'bg-amber-50 border-amber-200 hover:bg-amber-100'
+          : isContacted
+          ? 'bg-green-50 border-green-200 hover:bg-green-100'
           : 'bg-white border-gray-100 hover:bg-gray-50'
       }`}
     >
@@ -49,7 +53,12 @@ function CallerCard({
 
       {/* Info */}
       <div className="flex-1 min-w-0">
-        <p className="text-sm font-bold text-gray-900 truncate">{customer.name}</p>
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <p className="text-sm font-bold text-gray-900 truncate">{customer.name}</p>
+          {isContacted && !isFollowUp && (
+            <span className="text-[9px] font-bold bg-green-100 text-green-600 px-1.5 py-0.5 rounded-full uppercase tracking-wide flex-shrink-0">✓ Contacted</span>
+          )}
+        </div>
         <p className="text-xs text-gray-500 truncate">
           {customer.phone || <span className="text-gray-300 italic">No phone</span>}
         </p>
@@ -72,6 +81,7 @@ function CallerCard({
           </div>
         ) : (
           <div className={`text-[10px] font-bold px-2 py-1 rounded-full ${
+            isContacted ? 'bg-green-100 text-green-600' :
             daysAgo >= 90 ? 'bg-red-100 text-red-600' :
             daysAgo >= 60 ? 'bg-orange-100 text-orange-600' :
             'bg-gray-100 text-gray-500'
@@ -145,26 +155,43 @@ export default function CallerDashboard() {
       return da - db;
     });
 
-  // Priority queue: no contact in 30+ days, not in follow-up list
+  // Effective last contact: most recent activity wins over stale GAS field
+  const effectiveDaysAgo = (c: Customer): number => {
+    const cName = c.name.toLowerCase();
+    const latest = activities
+      .filter(a => a.customerId === c.id || a.customerId.toLowerCase() === cName)
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0];
+    const effectiveDate = latest
+      ? (latest.date > (c.lastContactDate ?? '') ? latest.date : c.lastContactDate)
+      : c.lastContactDate;
+    return safeDaysSince(effectiveDate);
+  };
+
+  // Priority queue: all active customers not in follow-up list, contacted sorted last
   const followUpIds = new Set(followUpCustomers.map(c => c.id));
 
-  const hasRecentContact = (c: Customer) => safeDaysSince(c.lastContactDate) < 30;
-
-  // Group by priority tier
+  // Group by priority tier (include ALL active customers, not just overdue)
   const priorityGroups: Record<number, Customer[]> = { 1: [], 2: [], 3: [], 4: [], 5: [] };
   customers
-    .filter(c => c.activeStatus && !hasRecentContact(c) && !followUpIds.has(c.id))
+    .filter(c => c.activeStatus && !followUpIds.has(c.id))
     .forEach(c => {
       const tier = Math.min(c.priorityTier, 5) as 1 | 2 | 3 | 4 | 5;
       priorityGroups[tier].push(c);
     });
 
-  // Sort each group by longest untouched first
+  // Sort each group: overdue (30+ days) first by most overdue, then contacted at bottom
   Object.values(priorityGroups).forEach(group =>
-    group.sort((a, b) => safeDaysSince(b.lastContactDate) - safeDaysSince(a.lastContactDate))
+    group.sort((a, b) => {
+      const da = effectiveDaysAgo(a);
+      const db = effectiveDaysAgo(b);
+      const aContacted = da < 30;
+      const bContacted = db < 30;
+      if (aContacted !== bContacted) return aContacted ? 1 : -1; // contacted go last
+      return db - da; // most overdue first within each section
+    })
   );
 
-  const totalQueue = Object.values(priorityGroups).reduce((s, g) => s + g.length, 0);
+  const totalQueue = Object.values(priorityGroups).reduce((s, g) => s + g.filter(c => effectiveDaysAgo(c) >= 30).length, 0);
 
   // ── This week stats ────────────────────────────────────────────
   const weekStart = new Date(now);
@@ -284,7 +311,7 @@ export default function CallerDashboard() {
               <CallerCard
                 key={c.id}
                 customer={c}
-                daysAgo={safeDaysSince(c.lastContactDate)}
+                daysAgo={effectiveDaysAgo(c)}
                 followUpDate={followUpMap.get(c.id)}
                 onOpen={() => setSelectedCustomer(c)}
                 isFollowUp
@@ -305,6 +332,7 @@ export default function CallerDashboard() {
           if (group.length === 0) return null;
           const isExpanded = expandedPriority === priority;
           const style = TIER_STYLE[priority];
+          const contactedCount = group.filter(c => effectiveDaysAgo(c) < 30).length;
 
           return (
             <div key={priority} className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
@@ -320,22 +348,33 @@ export default function CallerDashboard() {
                   <span className="text-xs text-gray-500">{group.length} accounts</span>
                   {priority === 1 && <span className="text-[10px] font-bold text-red-500 uppercase tracking-wide">Highest</span>}
                 </div>
-                {isExpanded ? <ChevronUp size={15} className="text-gray-400" /> : <ChevronDown size={15} className="text-gray-400" />}
+                <div className="flex items-center gap-2">
+                  {contactedCount > 0 && (
+                    <span className="text-[10px] font-bold bg-green-100 text-green-600 px-2 py-0.5 rounded-full">
+                      {contactedCount}/{group.length} contacted
+                    </span>
+                  )}
+                  {isExpanded ? <ChevronUp size={15} className="text-gray-400" /> : <ChevronDown size={15} className="text-gray-400" />}
+                </div>
               </button>
 
               {/* Accounts list */}
               {isExpanded && (
                 <div className="px-3 pb-3 space-y-2 border-t border-gray-50">
                   <div className="pt-2 space-y-2">
-                    {group.map(c => (
-                      <CallerCard
-                        key={c.id}
-                        customer={c}
-                        daysAgo={safeDaysSince(c.lastContactDate)}
-                        onOpen={() => setSelectedCustomer(c)}
-                        isFollowUp={false}
-                      />
-                    ))}
+                    {group.map(c => {
+                      const days = effectiveDaysAgo(c);
+                      return (
+                        <CallerCard
+                          key={c.id}
+                          customer={c}
+                          daysAgo={days}
+                          onOpen={() => setSelectedCustomer(c)}
+                          isFollowUp={false}
+                          isContacted={days < 30}
+                        />
+                      );
+                    })}
                   </div>
                 </div>
               )}

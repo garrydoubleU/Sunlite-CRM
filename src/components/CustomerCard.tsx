@@ -38,7 +38,7 @@ export default function CustomerCard({ customer, onOpenModal }: CustomerCardProp
     : customer.lastContactDate;
 
   const daysSinceContact = safeDaysSince(effectiveLastContact);
-  const isRecentlyContacted = daysSinceContact <= 7;
+  const isRecentlyContacted = daysSinceContact <= 30;
   const isUntouched = !isOwner && daysSinceContact >= 30;
 
   return (
