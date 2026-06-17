@@ -166,17 +166,7 @@ export const useCustomerStore = create<CustomerState>((set, get) => ({
       // accounts outside their book, plus any assignments addressed to them.
       if (!seesAll && email) {
         fetchAllCustomers()
-          .then(all => {
-            if (all.length > 0) {
-              const mapped = all.map(gasCustomerToLocal);
-              // Update directory (full list) AND re-derive the rep's own book
-              // from the same fetch so both are always consistent.
-              set({
-                directory: mapped,
-                customers: mapped.filter(c => ownsAccount(c, email)),
-              });
-            }
-          })
+          .then(all => { if (all.length > 0) set({ directory: all.map(gasCustomerToLocal) }); })
           .catch(() => {});
         fetchAssignments(email)
           .then(assignments => set({ assignments }))
