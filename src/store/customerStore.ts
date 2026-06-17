@@ -176,7 +176,7 @@ export const useCustomerStore = create<CustomerState>((set, get) => ({
           .catch(() => {});
       }
       // Admin: load pending access requests
-      if (currentUser?.role === 'admin') {
+      if (currentUser?.role === 'admin' || currentUser?.role === 'field_sales' || currentUser?.role === 'inside_sales') {
         get().loadAccessRequests();
       }
     } catch (err) {
