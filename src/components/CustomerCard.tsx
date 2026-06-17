@@ -1,6 +1,7 @@
 import type { Customer } from '../types';
 import { canViewRevenue } from '../utils/roleGate';
 import { useAuthStore } from '../store/authStore';
+import { useCustomerStore } from '../store/customerStore';
 import { safeFormat, safeDaysSince } from '../utils/scheduler';
 
 interface CustomerCardProps {
@@ -23,17 +24,28 @@ const FREQ_COLORS: Record<string, string> = {
 
 export default function CustomerCard({ customer, onOpenModal }: CustomerCardProps) {
   const { currentUser } = useAuthStore();
+  const { activities } = useCustomerStore();
   const showRevenue = canViewRevenue(currentUser?.role ?? 'field_sales');
   const isOwner = currentUser?.role === 'owner';
 
-  const daysSinceContact = safeDaysSince(customer.lastContactDate);
+  // Derive effective last contact: most recent activity beats the GAS field (which may be stale)
+  const customerName = customer.name.toLowerCase();
+  const latestActivity = activities
+    .filter(a => a.customerId === customer.id || a.customerId.toLowerCase() === customerName)
+    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0];
+  const effectiveLastContact = latestActivity
+    ? (latestActivity.date > (customer.lastContactDate ?? '') ? latestActivity.date : customer.lastContactDate)
+    : customer.lastContactDate;
+
+  const daysSinceContact = safeDaysSince(effectiveLastContact);
+  const isRecentlyContacted = daysSinceContact <= 7;
   const isUntouched = !isOwner && daysSinceContact >= 30;
 
   return (
     <div
       onClick={onOpenModal}
       className={`bg-white rounded-2xl shadow-sm border transition-all duration-200 ${
-        isUntouched ? 'border-red-200' : 'border-gray-100'
+        isUntouched ? 'border-red-200' : isRecentlyContacted ? 'border-green-300' : 'border-gray-100'
       } ${onOpenModal ? 'cursor-pointer hover:shadow-md hover:border-amber-300' : ''}`}
     >
       <div className="p-4">
@@ -44,6 +56,9 @@ export default function CustomerCard({ customer, onOpenModal }: CustomerCardProp
               <h3 className="font-bold text-gray-900 text-sm">{customer.name}</h3>
               {isUntouched && (
                 <span className="text-[10px] font-bold bg-red-100 text-red-600 px-2 py-0.5 rounded-full uppercase tracking-wide">Untouched</span>
+              )}
+              {!isUntouched && isRecentlyContacted && (
+                <span className="text-[10px] font-bold bg-green-100 text-green-600 px-2 py-0.5 rounded-full uppercase tracking-wide">✓ Contacted</span>
               )}
             </div>
             <p className="text-xs text-gray-400 font-mono mt-0.5">{customer.id}</p>
@@ -93,7 +108,7 @@ export default function CustomerCard({ customer, onOpenModal }: CustomerCardProp
             </div>
           ) : (
             <div className="bg-gray-50 rounded-lg p-2">
-              <p className="text-xs font-bold text-gray-800">{safeFormat(customer.lastContactDate, 'MMM d')}</p>
+              <p className="text-xs font-bold text-gray-800">{safeFormat(effectiveLastContact, 'MMM d')}</p>
               <p className="text-[10px] text-gray-400">Last Contact</p>
             </div>
           )}
