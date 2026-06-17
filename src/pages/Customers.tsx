@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { Search, X } from 'lucide-react';
-import { useCustomerStore, ownsAccount } from '../store/customerStore';
+import { useCustomerStore } from '../store/customerStore';
 import { useAuthStore } from '../store/authStore';
 import CustomerCard from '../components/CustomerCard';
 import CustomerModal from '../components/CustomerModal';
@@ -15,58 +15,71 @@ export default function Customers() {
   const { currentUser } = useAuthStore();
   const role = currentUser?.role ?? 'field_sales';
   const myEmail = currentUser?.email ?? '';
-  const isRep = role === 'field_sales' || role === 'inside_sales';
-  const canFilterByRep = role === 'customer_service' || role === 'owner' || role === 'admin';
 
-  const [bookFilter, setBookFilter] = useState<BookFilter>('mine');
-  const [search, setSearch] = useState('');
-  const [tierFilter, setTierFilter] = useState<TierFilter>('all');
-  const [freqFilter, setFreqFilter] = useState<FreqFilter>('all');
-  const [repFilter, setRepFilter] = useState<string>('all');
+  // Who can do what
+  const isRep = role === 'field_sales' || role === 'inside_sales';
+  const isCS  = role === 'customer_service';
+  const isOwnerOrAdmin = role === 'owner' || role === 'admin';
+  const canFilterByRep = isCS || isOwnerOrAdmin;
+
+  // For owner/admin/CS: customers already contains everyone (seesAll=true in store).
+  // For reps: customers = their own book; directory = full company (async).
+  // Pick the right base once and never switch mid-render.
+  const allAccounts = isRep ? (directory.length > 0 ? directory : customers) : customers;
+
+  const [bookFilter, setBookFilter]   = useState<BookFilter>('mine');
+  const [search, setSearch]           = useState('');
+  const [tierFilter, setTierFilter]   = useState<TierFilter>('all');
+  const [freqFilter, setFreqFilter]   = useState<FreqFilter>('all');
+  const [repFilter, setRepFilter]     = useState<string>('all');
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
 
-  const source = directory.length > 0 ? directory : customers;
-
+  // Rep names list — only meaningful for CS/owner
   const repNames = useMemo(() => {
+    if (!canFilterByRep) return [];
     const names = new Set<string>();
-    source.forEach(c => { if (c.assignedRepName) names.add(c.assignedRepName); });
+    allAccounts.forEach(c => { if (c.assignedRepName) names.add(c.assignedRepName); });
     return Array.from(names).sort();
-  }, [source]);
+  }, [allAccounts, canFilterByRep]);
 
+  // Pending requests this rep submitted
   const pendingIds = useMemo(() =>
-    new Set(accessRequests.filter(r => r.status === 'pending' && r.requesterEmail === myEmail).map(r => r.customerId)),
+    new Set(
+      accessRequests
+        .filter(r => r.status === 'pending' && r.requesterEmail === myEmail)
+        .map(r => r.customerId)
+    ),
     [accessRequests, myEmail]
   );
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase().trim();
 
+    // 1. Pick the base set from the book-level tab (reps only)
     let base: Customer[];
     if (isRep && bookFilter === 'mine') {
-      base = source.filter(c => ownsAccount(c, myEmail));
+      base = customers;
     } else if (isRep && bookFilter === 'pending') {
-      base = source.filter(c => pendingIds.has(c.id));
+      base = allAccounts.filter(c => pendingIds.has(c.id));
     } else {
-      base = source;
+      base = allAccounts; // "all" for reps, or everything for CS/owner/admin
     }
 
-    const results = base.filter(c => {
-      if (q && !c.name.toLowerCase().includes(q) && !c.id.toLowerCase().includes(q) && !c.territory.toLowerCase().includes(q)) return false;
+    // 2. Apply filters
+    return base.filter(c => {
+      if (q) {
+        const matchesText =
+          c.name.toLowerCase().includes(q) ||
+          c.id.toLowerCase().includes(q) ||
+          c.territory.toLowerCase().includes(q);
+        if (!matchesText) return false;
+      }
       if (tierFilter !== 'all' && c.priorityTier !== parseInt(tierFilter)) return false;
       if (freqFilter !== 'all' && c.visitFrequency !== freqFilter) return false;
       if (repFilter !== 'all' && c.assignedRepName !== repFilter) return false;
       return true;
     });
-
-    if (q) {
-      results.sort((a, b) => {
-        const aExact = a.id.toLowerCase() === q || a.name.toLowerCase() === q ? 0 : 1;
-        const bExact = b.id.toLowerCase() === q || b.name.toLowerCase() === q ? 0 : 1;
-        return aExact - bExact;
-      });
-    }
-    return results;
-  }, [source, search, bookFilter, tierFilter, freqFilter, repFilter, isRep, myEmail, pendingIds]);
+  }, [allAccounts, customers, search, bookFilter, tierFilter, freqFilter, repFilter, isRep, pendingIds]);
 
   function clearFilters() {
     setSearch('');
@@ -75,23 +88,25 @@ export default function Customers() {
     setRepFilter('all');
   }
 
-  const hasFilters = search || tierFilter !== 'all' || freqFilter !== 'all' || repFilter !== 'all';
+  const hasFilters = !!(search || tierFilter !== 'all' || freqFilter !== 'all' || repFilter !== 'all');
 
   return (
     <div>
-      {/* Book filter tabs — reps only */}
+      {/* Book tabs — reps only */}
       {isRep && (
         <div className="flex gap-1 bg-gray-100 rounded-xl p-1 mb-4">
           {([
-            { id: 'mine' as BookFilter, label: 'My Customers' },
-            { id: 'all' as BookFilter, label: 'All Customers' },
+            { id: 'mine'    as BookFilter, label: 'My Customers' },
+            { id: 'all'     as BookFilter, label: 'All Customers' },
             { id: 'pending' as BookFilter, label: 'Pending', count: pendingIds.size },
           ]).map(tab => (
             <button
               key={tab.id}
               onClick={() => setBookFilter(tab.id)}
               className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-bold transition-all ${
-                bookFilter === tab.id ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+                bookFilter === tab.id
+                  ? 'bg-white text-gray-900 shadow-sm'
+                  : 'text-gray-500 hover:text-gray-700'
               }`}
             >
               {tab.label}
@@ -105,8 +120,9 @@ export default function Customers() {
         </div>
       )}
 
-      {/* Search + filters */}
+      {/* Search + filter bar */}
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 mb-6">
+        {/* Search row */}
         <div className="flex items-center gap-3 mb-3">
           <div className="flex-1 flex items-center gap-2 bg-gray-50 rounded-xl px-4 py-2.5 border border-gray-200 focus-within:border-amber-400 transition-colors">
             <Search size={15} className="text-gray-400" />
@@ -125,35 +141,50 @@ export default function Customers() {
           {hasFilters && (
             <button
               onClick={clearFilters}
-              className="flex items-center gap-1.5 text-xs font-medium text-red-500 hover:text-red-600 px-3 py-2 rounded-xl hover:bg-red-50 transition-colors"
+              className="flex items-center gap-1.5 text-xs font-medium text-red-500 hover:text-red-600 px-3 py-2 rounded-xl hover:bg-red-50 transition-colors flex-shrink-0"
             >
               <X size={13} /> Clear
             </button>
           )}
         </div>
 
-        <div className="flex flex-wrap gap-2">
-          <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wide self-center">Tier:</span>
+        {/* Filter chips */}
+        <div className="flex flex-wrap gap-2 items-center">
+          <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wide">Tier:</span>
           {(['all', '1', '2', '3', '4'] as TierFilter[]).map(t => (
-            <button key={t} onClick={() => setTierFilter(t)}
-              className={`text-xs font-semibold px-3 py-1.5 rounded-full transition-colors ${tierFilter === t ? 'bg-amber-500 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
+            <button
+              key={t}
+              onClick={() => setTierFilter(t)}
+              className={`text-xs font-semibold px-3 py-1.5 rounded-full transition-colors ${
+                tierFilter === t ? 'bg-amber-500 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}
+            >
               {t === 'all' ? 'All' : `Tier ${t}`}
             </button>
           ))}
-          <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wide self-center ml-2">Frequency:</span>
+
+          <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wide ml-2">Frequency:</span>
           {(['all', 'weekly', 'biweekly', 'monthly'] as FreqFilter[]).map(f => (
-            <button key={f} onClick={() => setFreqFilter(f)}
-              className={`text-xs font-semibold px-3 py-1.5 rounded-full transition-colors capitalize ${freqFilter === f ? 'bg-amber-500 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
+            <button
+              key={f}
+              onClick={() => setFreqFilter(f)}
+              className={`text-xs font-semibold px-3 py-1.5 rounded-full transition-colors capitalize ${
+                freqFilter === f ? 'bg-amber-500 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}
+            >
               {f === 'all' ? 'All' : f}
             </button>
           ))}
+
           {canFilterByRep && repNames.length > 0 && (
             <>
-              <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wide self-center ml-2">Rep:</span>
+              <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wide ml-2">Rep:</span>
               <select
                 value={repFilter}
                 onChange={e => setRepFilter(e.target.value)}
-                className={`text-xs font-semibold px-3 py-1.5 rounded-full transition-colors appearance-none cursor-pointer ${repFilter !== 'all' ? 'bg-amber-500 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+                className={`text-xs font-semibold px-3 py-1.5 rounded-full appearance-none cursor-pointer transition-colors ${
+                  repFilter !== 'all' ? 'bg-amber-500 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                }`}
               >
                 <option value="all">All Reps</option>
                 {repNames.map(name => (
@@ -165,17 +196,15 @@ export default function Customers() {
         </div>
       </div>
 
-      {/* Results count */}
-      <div className="mb-4">
-        <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">
-          {filtered.length} account{filtered.length !== 1 ? 's' : ''}
-        </p>
-      </div>
+      {/* Count */}
+      <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-4">
+        {filtered.length} account{filtered.length !== 1 ? 's' : ''}
+      </p>
 
-      {/* Customer grid */}
+      {/* Grid */}
       {filtered.length === 0 ? (
         <div className="text-center py-16">
-          {bookFilter === 'pending' ? (
+          {isRep && bookFilter === 'pending' ? (
             <p className="text-gray-400 text-sm">No pending access requests.</p>
           ) : (
             <>

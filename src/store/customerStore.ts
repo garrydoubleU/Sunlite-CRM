@@ -118,7 +118,7 @@ export const useCustomerStore = create<CustomerState>((set, get) => ({
     const email = currentUser?.email ?? '';
     // Owners and admins see every account — pass no email so GAS returns all.
     // Reps get only their assigned book, filtered server-side by email.
-    const seesAll = currentUser?.role === 'owner' || currentUser?.role === 'admin';
+    const seesAll = currentUser?.role === 'owner' || currentUser?.role === 'admin' || currentUser?.role === 'customer_service';
     try {
       const [rawCustomers, rawActivities, rawUsers] = await Promise.all([
         seesAll ? fetchAllCustomers(email) : fetchCustomers(email),
