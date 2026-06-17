@@ -25,8 +25,7 @@ export default function Dashboard() {
   const [visitsOpen, setVisitsOpen] = useState(false);
   const [checkInsOpen, setCheckInsOpen] = useState(false);
 
-  if (role === 'owner') return <OwnerDashboard />;
-  if (role === 'admin') return <AdminDashboard />;
+  if (role === 'owner' || role === 'admin') return <OwnerDashboard />;
   if (role === 'inside_sales' || role === 'customer_service') return <CallerDashboard />;
 
   const now = new Date();
