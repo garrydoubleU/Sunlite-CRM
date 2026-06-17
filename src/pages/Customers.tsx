@@ -6,7 +6,7 @@ import CustomerCard from '../components/CustomerCard';
 import CustomerModal from '../components/CustomerModal';
 import type { Customer, VisitFrequency } from '../types';
 
-type BookFilter = 'mine' | 'all' | 'pending';
+type BookFilter = 'mine' | 'pending';
 type TierFilter = 'all' | '1' | '2' | '3' | '4';
 type FreqFilter = 'all' | VisitFrequency;
 
@@ -43,8 +43,6 @@ export default function Customers() {
     );
   }
 
-  // directory = full company list; customers = rep's own book (both derived from
-  // the same background fetch so they're always consistent after GAS loads).
   const fullDir = directory.length > 0 ? directory : customers;
 
   // Pending IDs for this rep
@@ -54,12 +52,15 @@ export default function Customers() {
       .map(r => r.customerId)
   );
 
-  // Pick base by tab
+  // Pick base:
+  // - reps on "mine" → their own book (customers)
+  // - reps on "pending" → full directory filtered to pending IDs
+  // - CS / admin / owner → full directory
   let base: Customer[];
-  if (isRep && bookFilter === 'mine') {
-    base = customers;
-  } else if (isRep && bookFilter === 'pending') {
+  if (isRep && bookFilter === 'pending') {
     base = fullDir.filter(c => pendingIds.has(c.id));
+  } else if (isRep) {
+    base = customers; // "mine" — never touches fullDir
   } else {
     base = fullDir;
   }
@@ -100,13 +101,12 @@ export default function Customers() {
   return (
     <div>
 
-      {/* Book tabs — reps only */}
+      {/* Book tabs — reps only: My Customers + Pending */}
       {isRep && (
         <div className="flex gap-1 bg-gray-100 rounded-xl p-1 mb-4">
           {([
-            { id: 'mine'    as BookFilter, label: 'My Customers',  count: 0 },
-            { id: 'all'     as BookFilter, label: 'All Customers', count: 0 },
-            { id: 'pending' as BookFilter, label: 'Pending',       count: pendingCount },
+            { id: 'mine'    as BookFilter, label: 'My Customers', count: 0 },
+            { id: 'pending' as BookFilter, label: 'Pending',      count: pendingCount },
           ]).map(tab => (
             <button
               key={tab.id}
