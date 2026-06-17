@@ -16,16 +16,25 @@ export default function Customers() {
   const role = currentUser?.role ?? 'field_sales';
   const myEmail = currentUser?.email ?? '';
   const isRep = role === 'field_sales' || role === 'inside_sales';
+  const canFilterByRep = role === 'customer_service' || role === 'owner' || role === 'admin';
 
   const [bookFilter, setBookFilter] = useState<BookFilter>('mine');
   const [search, setSearch] = useState('');
   const [tierFilter, setTierFilter] = useState<TierFilter>('all');
   const [freqFilter, setFreqFilter] = useState<FreqFilter>('all');
+  const [repFilter, setRepFilter] = useState<string>('all');
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
 
   const deferredSearch = useDeferredValue(search);
 
   const source = directory.length > 0 ? directory : customers;
+
+  // Unique rep names from source for the rep filter dropdown
+  const repNames = useMemo(() => {
+    const names = new Set<string>();
+    source.forEach(c => { if (c.assignedRepName) names.add(c.assignedRepName); });
+    return Array.from(names).sort();
+  }, [source]);
 
   // Customers the rep has a pending access request for
   const pendingIds = useMemo(() =>
@@ -49,6 +58,7 @@ export default function Customers() {
       if (q && !c.name.toLowerCase().includes(q) && !c.id.toLowerCase().includes(q) && !c.territory.toLowerCase().includes(q)) return false;
       if (tierFilter !== 'all' && c.priorityTier !== parseInt(tierFilter)) return false;
       if (freqFilter !== 'all' && c.visitFrequency !== freqFilter) return false;
+      if (repFilter !== 'all' && c.assignedRepName !== repFilter) return false;
       return true;
     });
 
@@ -60,7 +70,7 @@ export default function Customers() {
       });
     }
     return results;
-  }, [source, deferredSearch, bookFilter, tierFilter, freqFilter, isRep, myEmail, pendingIds]);
+  }, [source, deferredSearch, bookFilter, tierFilter, freqFilter, repFilter, isRep, myEmail, pendingIds]);
 
   const isStale = search !== deferredSearch;
 
@@ -68,9 +78,10 @@ export default function Customers() {
     setSearch('');
     setTierFilter('all');
     setFreqFilter('all');
+    setRepFilter('all');
   }
 
-  const hasFilters = search || tierFilter !== 'all' || freqFilter !== 'all';
+  const hasFilters = search || tierFilter !== 'all' || freqFilter !== 'all' || repFilter !== 'all';
 
   return (
     <div>
@@ -142,6 +153,23 @@ export default function Customers() {
               {f === 'all' ? 'All' : f}
             </button>
           ))}
+
+          {/* Rep filter — CS and owner only */}
+          {canFilterByRep && repNames.length > 0 && (
+            <>
+              <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wide self-center ml-2">Rep:</span>
+              <select
+                value={repFilter}
+                onChange={e => setRepFilter(e.target.value)}
+                className={`text-xs font-semibold px-3 py-1.5 rounded-full transition-colors appearance-none cursor-pointer ${repFilter !== 'all' ? 'bg-amber-500 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+              >
+                <option value="all">All Reps</option>
+                {repNames.map(name => (
+                  <option key={name} value={name}>{name}</option>
+                ))}
+              </select>
+            </>
+          )}
         </div>
       </div>
 
