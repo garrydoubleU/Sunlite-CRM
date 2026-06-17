@@ -165,7 +165,7 @@ function mapRawCustomer(r: Record<string, unknown>): GASCustomer {
     phone: String(r.Phone ?? r.phone ?? ''),
     email: String(r.Email ?? r.CustomerEmail ?? r.email ?? ''),
     priorityTier: tier as 1 | 2 | 3 | 4,
-    customerClass: String(r.Category ?? r.CustomerClass ?? r.Type ?? ''),
+    customerClass: String(r['Customer Type'] ?? r.CustomerType ?? r.Category ?? r.CustomerClass ?? r.Type ?? ''),
     visitFrequency: freq,
     lastContactDate: safeDate(r.LastContactDate ?? r.LastContact ?? r.LastOrderDate ?? r.VisitStartDate),
     activeStatus: String(r.Status ?? r.status ?? 'active').toLowerCase() !== 'inactive',
