@@ -269,6 +269,7 @@ function mapRawLog(raw: Record<string, unknown>, idx: number): GASActivity {
     summary: pick('notes', 'summary', 'note'),
     source: sourceStr === 'gmail-auto' ? 'gmail-auto' : 'manual',
     ...(followUpDate ? { followUpDate } : {}),
+    notifyRep: pick('notifyrep', 'notifyRep').toLowerCase() === 'true',
   };
 }
 

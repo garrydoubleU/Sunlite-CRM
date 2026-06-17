@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Phone, Clock, CheckCircle, ChevronDown, ChevronUp, AlertCircle, Bell, ListChecks } from 'lucide-react';
+import { Phone, Clock, CheckCircle, ChevronDown, ChevronUp, AlertCircle, ListChecks } from 'lucide-react';
 import { useCustomerStore } from '../store/customerStore';
 import { useAuthStore } from '../store/authStore';
 import { safeDaysSince, safeFormat } from '../utils/scheduler';
@@ -96,22 +96,25 @@ function CallerCard({
 }
 
 export default function CallerDashboard() {
-  const { customers, activities, csTasksSent, loadCSTasksSent, nudgeRep } = useCustomerStore();
+  const { customers, activities, loadCSTasksSent } = useCustomerStore();
   const { currentUser } = useAuthStore();
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [expandedPriority, setExpandedPriority] = useState<number | null>(1);
   const [mainTab, setMainTab] = useState<'queue' | 'tasks'>('queue');
-  const [nudgedIds, setNudgedIds] = useState<Set<string>>(new Set());
   const now = new Date();
 
   useEffect(() => { loadCSTasksSent(); }, []);
 
-  const openTasks = csTasksSent.filter(t => !t.acknowledged);
-  const closedTasks = csTasksSent.filter(t => t.acknowledged);
+  // My Tasks = activities this CS user logged with "notify rep" checked
+  const myName = currentUser?.name ?? '';
+  const notifyTasks = activities
+    .filter(a => a.notifyRep === true && a.repName === myName)
+    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
-  const handleNudge = async (id: string) => {
-    await nudgeRep(id);
-    setNudgedIds(prev => new Set(prev).add(id));
+  // Resolve customer name from customerId (activity.customerId may be name or id)
+  const resolveCustomerName = (customerId: string): string => {
+    const c = customers.find(x => x.id === customerId || x.name.toLowerCase() === customerId.toLowerCase());
+    return c?.name ?? customerId;
   };
 
   // Customers logged today
@@ -167,7 +170,6 @@ export default function CallerDashboard() {
   const weekStart = new Date(now);
   weekStart.setHours(0, 0, 0, 0);
   weekStart.setDate(now.getDate() - (now.getDay() === 0 ? 6 : now.getDay() - 1));
-  const myName = currentUser?.name ?? '';
   const thisWeek = activities.filter(a => new Date(a.date) >= weekStart && (!myName || a.repName === myName));
   const weekCalls = thisWeek.filter(a => a.type === 'call').length;
   const weekEmails = thisWeek.filter(a => a.type === 'email').length;
@@ -185,9 +187,9 @@ export default function CallerDashboard() {
           <p className="text-lg font-bold text-gray-900">Hey {currentUser?.name?.split(' ')[0]} 👋</p>
           <p className="text-xs text-gray-400">{now.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}</p>
         </div>
-        {openTasks.length > 0 && (
+        {notifyTasks.length > 0 && (
           <span className="text-[10px] font-bold bg-amber-100 text-amber-700 px-2 py-1 rounded-full">
-            {openTasks.length} open task{openTasks.length !== 1 ? 's' : ''}
+            {notifyTasks.length} task{notifyTasks.length !== 1 ? 's' : ''}
           </span>
         )}
       </div>
@@ -205,80 +207,33 @@ export default function CallerDashboard() {
           className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-bold transition-all ${mainTab === 'tasks' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'}`}
         >
           <ListChecks size={12} /> My Tasks
-          {openTasks.length > 0 && <span className="w-4 h-4 bg-amber-500 text-white text-[9px] font-black rounded-full flex items-center justify-center">{openTasks.length}</span>}
+          {notifyTasks.length > 0 && <span className="w-4 h-4 bg-amber-500 text-white text-[9px] font-black rounded-full flex items-center justify-center">{notifyTasks.length}</span>}
         </button>
       </div>
 
       {/* ── Tasks tab ─────────────────────────────────────────────── */}
       {mainTab === 'tasks' && (
         <div className="space-y-4">
-          {/* Open tasks */}
-          <div>
-            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.15em] px-1 mb-2">
-              Open — Waiting on rep ({openTasks.length})
-            </p>
-            {openTasks.length === 0 ? (
-              <div className="text-center py-10 bg-white rounded-2xl border border-gray-100">
-                <CheckCircle size={28} className="text-green-400 mx-auto mb-2" />
-                <p className="text-sm font-bold text-gray-700">No open tasks</p>
-                <p className="text-xs text-gray-400 mt-1">All handoffs have been completed.</p>
-              </div>
-            ) : (
-              <div className="space-y-2">
-                {openTasks.map(t => (
-                  <div key={t.id} className="bg-white rounded-2xl border border-amber-200 p-4 space-y-2">
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-bold text-gray-900 truncate">{t.customerName}</p>
-                        <p className="text-[10px] text-gray-400 font-mono">{t.customerId}</p>
-                      </div>
-                      <span className="text-[10px] font-bold bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full uppercase flex-shrink-0">{t.activityType}</span>
+          {notifyTasks.length === 0 ? (
+            <div className="text-center py-12 bg-white rounded-2xl border border-gray-100">
+              <CheckCircle size={28} className="text-green-400 mx-auto mb-2" />
+              <p className="text-sm font-bold text-gray-700">No tasks yet</p>
+              <p className="text-xs text-gray-400 mt-1">Tasks appear when you check "Notify rep" while logging an activity.</p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {notifyTasks.map(t => (
+                <div key={t.id} className="bg-white rounded-2xl border border-amber-200 p-4 space-y-2">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-bold text-gray-900 truncate">{resolveCustomerName(t.customerId)}</p>
+                      <p className="text-[10px] text-gray-400">{safeFormat(t.date, 'MMM d, yyyy · h:mm a')}</p>
                     </div>
-                    <p className="text-xs text-gray-500 bg-gray-50 rounded-lg p-2">{t.notes}</p>
-                    <div className="flex items-center justify-between">
-                      <p className="text-[10px] text-gray-400">{safeFormat(t.date, 'MMM d, h:mm a')} · to {t.repEmail.split('@')[0]}</p>
-                      <button
-                        onClick={() => handleNudge(t.id)}
-                        disabled={nudgedIds.has(t.id)}
-                        className={`flex items-center gap-1 text-[11px] font-bold px-3 py-1.5 rounded-lg transition-colors ${nudgedIds.has(t.id) ? 'bg-gray-100 text-gray-400' : 'bg-blue-100 text-blue-700 hover:bg-blue-200'}`}
-                      >
-                        <Bell size={11} />
-                        {nudgedIds.has(t.id) ? 'Nudged' : 'Nudge Rep'}
-                      </button>
-                    </div>
+                    <span className="text-[10px] font-bold bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full uppercase flex-shrink-0">{t.type}</span>
                   </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Closed tasks */}
-          {closedTasks.length > 0 && (
-            <div>
-              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.15em] px-1 mb-2">
-                Completed ({closedTasks.length})
-              </p>
-              <div className="space-y-2">
-                {closedTasks.map(t => (
-                  <div key={t.id} className="bg-white rounded-2xl border border-gray-100 p-4 space-y-2 opacity-80">
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-bold text-gray-700 truncate">{t.customerName}</p>
-                        <p className="text-[10px] text-gray-400 font-mono">{t.customerId}</p>
-                      </div>
-                      <span className="text-[10px] font-bold bg-green-100 text-green-700 px-2 py-0.5 rounded-full uppercase flex-shrink-0">Done</span>
-                    </div>
-                    <p className="text-xs text-gray-400 bg-gray-50 rounded-lg p-2">{t.notes}</p>
-                    {t.ackNotes && (
-                      <div className="bg-green-50 rounded-lg p-2">
-                        <p className="text-[10px] font-bold text-green-600 uppercase tracking-wider mb-0.5">Rep's note</p>
-                        <p className="text-xs text-green-800">{t.ackNotes}</p>
-                      </div>
-                    )}
-                    <p className="text-[10px] text-gray-400">{safeFormat(t.date, 'MMM d, h:mm a')} · {t.repEmail.split('@')[0]}</p>
-                  </div>
-                ))}
-              </div>
+                  {t.summary && <p className="text-xs text-gray-500 bg-gray-50 rounded-lg p-2">{t.summary}</p>}
+                </div>
+              ))}
             </div>
           )}
         </div>

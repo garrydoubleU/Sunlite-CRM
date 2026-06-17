@@ -589,17 +589,21 @@ export default function CustomerModal({ customer, onClose }: CustomerModalProps)
                   rows={2}
                   className="w-full bg-gray-50 border border-gray-200 rounded-lg px-2.5 py-2 text-xs text-gray-700 outline-none resize-none focus:border-amber-400 transition-colors"
                 />
-                {(currentUser?.role === 'customer_service' || currentUser?.role === 'inside_sales') && (
-                  <label className="flex items-center gap-2 text-xs text-gray-600 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={notifyRep}
-                      onChange={e => setNotifyRep(e.target.checked)}
-                      className="rounded"
-                    />
-                    <span>Notify assigned rep to follow up</span>
-                  </label>
-                )}
+                {(currentUser?.role === 'customer_service' || currentUser?.role === 'inside_sales') && (() => {
+                  const hasRep = !!(customer.assignedRepId && customer.assignedRepId.trim() && customer.assignedRepId.includes('@'));
+                  return (
+                    <label className={`flex items-center gap-2 text-xs ${hasRep ? 'text-gray-600 cursor-pointer' : 'text-gray-300 cursor-not-allowed'}`}>
+                      <input
+                        type="checkbox"
+                        checked={notifyRep}
+                        disabled={!hasRep}
+                        onChange={e => setNotifyRep(e.target.checked)}
+                        className="rounded disabled:opacity-40"
+                      />
+                      <span>Notify assigned rep to follow up{!hasRep ? ' (no rep assigned)' : ''}</span>
+                    </label>
+                  );
+                })()}
                 {restricted ? (
                   <div className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-lg px-2.5 py-1.5">
                     <FileText size={11} className="text-gray-400" />
