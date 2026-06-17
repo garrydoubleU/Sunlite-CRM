@@ -4,7 +4,7 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } fro
 import { useCustomerStore } from '../store/customerStore';
 import { useSettingsStore } from '../store/settingsStore';
 import { safeDaysSince, safeFormat } from '../utils/scheduler';
-import { startOfWeek, isToday, isThisWeek, format } from 'date-fns';
+import { startOfWeek, isToday, isThisWeek } from 'date-fns';
 import CustomerModal from '../components/CustomerModal';
 import type { Customer } from '../types';
 import { looksLikeEmail } from '../utils/scheduler';
@@ -145,7 +145,7 @@ export default function AdminDashboard() {
             <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Logged Today</span>
           </div>
           <p className="text-3xl font-black text-gray-900">{todayActivities.length}</p>
-          <p className="text-[10px] text-gray-400 mt-1">{repSummary.length} reps active</p>
+          <p className="text-[10px] text-gray-400 mt-1">{reps.length} reps active</p>
         </div>
 
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
