@@ -59,9 +59,14 @@ function CallerCard({
             <span className="text-[9px] font-bold bg-green-100 text-green-600 px-1.5 py-0.5 rounded-full uppercase tracking-wide flex-shrink-0">✓ Contacted</span>
           )}
         </div>
-        <p className="text-xs text-gray-500 truncate">
-          {customer.phone || <span className="text-gray-300 italic">No phone</span>}
-        </p>
+        <div className="flex items-center gap-1.5">
+          <p className="text-xs text-gray-500 truncate">
+            {customer.phone || <span className="text-gray-300 italic">No phone</span>}
+          </p>
+          {customer.customerClass && (
+            <span className="text-[9px] font-bold bg-gray-100 text-gray-400 px-1.5 py-0.5 rounded-full flex-shrink-0">{customer.customerClass}</span>
+          )}
+        </div>
         {isFollowUp && followUpDate && (
           <p className="text-[10px] font-semibold text-amber-600 mt-0.5">
             Follow-up: {daysUntilFollowUp === 0 ? 'TODAY' : daysUntilFollowUp === 1 ? 'TOMORROW' : daysUntilFollowUp! < 0 ? `${Math.abs(daysUntilFollowUp!)}d overdue` : `in ${daysUntilFollowUp}d`}

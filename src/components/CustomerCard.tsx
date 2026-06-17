@@ -61,7 +61,12 @@ export default function CustomerCard({ customer, onOpenModal }: CustomerCardProp
                 <span className="text-[10px] font-bold bg-green-100 text-green-600 px-2 py-0.5 rounded-full uppercase tracking-wide">✓ Contacted</span>
               )}
             </div>
-            <p className="text-xs text-gray-400 font-mono mt-0.5">{customer.id}</p>
+            <div className="flex items-center gap-1.5 mt-0.5">
+              <p className="text-xs text-gray-400 font-mono">{customer.id}</p>
+              {customer.customerClass && (
+                <span className="text-[9px] font-bold bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded-full">{customer.customerClass}</span>
+              )}
+            </div>
           </div>
           <span className={`text-[10px] font-bold px-2 py-1 rounded-full uppercase tracking-wide ${TIER_COLORS[customer.priorityTier]}`}>
             Tier {customer.priorityTier}
