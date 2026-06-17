@@ -1,4 +1,4 @@
-import { useState, useMemo, useDeferredValue } from 'react';
+import { useState, useMemo } from 'react';
 import { Search, X } from 'lucide-react';
 import { useCustomerStore, ownsAccount } from '../store/customerStore';
 import { useAuthStore } from '../store/authStore';
@@ -25,25 +25,21 @@ export default function Customers() {
   const [repFilter, setRepFilter] = useState<string>('all');
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
 
-  const deferredSearch = useDeferredValue(search);
-
   const source = directory.length > 0 ? directory : customers;
 
-  // Unique rep names from source for the rep filter dropdown
   const repNames = useMemo(() => {
     const names = new Set<string>();
     source.forEach(c => { if (c.assignedRepName) names.add(c.assignedRepName); });
     return Array.from(names).sort();
   }, [source]);
 
-  // Customers the rep has a pending access request for
   const pendingIds = useMemo(() =>
     new Set(accessRequests.filter(r => r.status === 'pending' && r.requesterEmail === myEmail).map(r => r.customerId)),
     [accessRequests, myEmail]
   );
 
   const filtered = useMemo(() => {
-    const q = deferredSearch.toLowerCase().trim();
+    const q = search.toLowerCase().trim();
 
     let base: Customer[];
     if (isRep && bookFilter === 'mine') {
@@ -70,9 +66,7 @@ export default function Customers() {
       });
     }
     return results;
-  }, [source, deferredSearch, bookFilter, tierFilter, freqFilter, repFilter, isRep, myEmail, pendingIds]);
-
-  const isStale = search !== deferredSearch;
+  }, [source, search, bookFilter, tierFilter, freqFilter, repFilter, isRep, myEmail, pendingIds]);
 
   function clearFilters() {
     setSearch('');
@@ -153,8 +147,6 @@ export default function Customers() {
               {f === 'all' ? 'All' : f}
             </button>
           ))}
-
-          {/* Rep filter — CS and owner only */}
           {canFilterByRep && repNames.length > 0 && (
             <>
               <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wide self-center ml-2">Rep:</span>
@@ -176,12 +168,12 @@ export default function Customers() {
       {/* Results count */}
       <div className="mb-4">
         <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">
-          {!isStale && `${filtered.length} account${filtered.length !== 1 ? 's' : ''}`}
+          {filtered.length} account{filtered.length !== 1 ? 's' : ''}
         </p>
       </div>
 
       {/* Customer grid */}
-      {!isStale && filtered.length === 0 ? (
+      {filtered.length === 0 ? (
         <div className="text-center py-16">
           {bookFilter === 'pending' ? (
             <p className="text-gray-400 text-sm">No pending access requests.</p>
@@ -198,7 +190,7 @@ export default function Customers() {
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {!isStale && filtered.map(c => (
+          {filtered.map(c => (
             <CustomerCard key={c.id} customer={c} onOpenModal={() => setSelectedCustomer(c)} />
           ))}
         </div>
