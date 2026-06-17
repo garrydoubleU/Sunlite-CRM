@@ -43,12 +43,8 @@ export default function Customers() {
     );
   }
 
-  // ── Compute everything right here, no memos, no stale refs ────
-  //
-  // Source selection:
-  //   reps  → "mine" uses customers (own book), "all/pending" uses directory
-  //   everyone else → customers (seesAll=true so already has all accounts)
-  //
+  // directory = full company list; customers = rep's own book (both derived from
+  // the same background fetch so they're always consistent after GAS loads).
   const fullDir = directory.length > 0 ? directory : customers;
 
   // Pending IDs for this rep
