@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Phone, Mail, Clock, Plus, ChevronDown, FileText, PhoneCall, Navigation, Send, ArrowUpRight, ArrowDownLeft, Lock, UserPlus } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
-import type { Customer, Contact, ActivityType, SalesRep } from '../types';
+import type { Customer, Contact, ActivityType, SalesRep, CSHandoff } from '../types';
 import { useCustomerStore, ownsAccount } from '../store/customerStore';
 import { useAuthStore } from '../store/authStore';
 import { calculateNextVisit, getDueDateLabel, getDueDateColor, safeFormat, safeDaysSince, parseEmailSummary, looksLikeEmail } from '../utils/scheduler';
@@ -16,6 +16,7 @@ import GmailAuthButton from './GmailAuthButton';
 interface CustomerModalProps {
   customer: Customer;
   onClose: () => void;
+  task?: CSHandoff; // optional CS task to complete alongside logging
 }
 
 function parseContacts(emailField: string): Contact[] {
@@ -47,8 +48,8 @@ const FREQ_OPTIONS = [
   { value: 'monthly',   label: 'Monthly' },
 ];
 
-export default function CustomerModal({ customer, onClose }: CustomerModalProps) {
-  const { getActivitiesForCustomer, addActivity, updateCustomer, assignAccount, requestAccess } = useCustomerStore();
+export default function CustomerModal({ customer, onClose, task }: CustomerModalProps) {
+  const { getActivitiesForCustomer, addActivity, updateCustomer, assignAccount, requestAccess, ackCSHandoff } = useCustomerStore();
   const { currentUser } = useAuthStore();
 
   const myEmail = currentUser?.email ?? '';
@@ -105,6 +106,7 @@ export default function CustomerModal({ customer, onClose }: CustomerModalProps)
   const [logType, setLogType] = useState<ActivityType | ''>('');
   const [followUp, setFollowUp] = useState('');
   const [notifyRep, setNotifyRep] = useState(false);
+  const [completeTask, setCompleteTask] = useState(!!task);
   const [gasDebug, setGasDebug] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -229,6 +231,8 @@ export default function CustomerModal({ customer, onClose }: CustomerModalProps)
     setSaving(false);
     setSaved(true);
     if (notifyRep) setGasDebug(JSON.stringify(result, null, 2));
+    // Complete the CS task if checkbox is checked
+    if (task && completeTask) ackCSHandoff(task.id, notes.trim());
     setNotes('');
     setLogType('');
     setFollowUp('');
@@ -579,6 +583,18 @@ export default function CustomerModal({ customer, onClose }: CustomerModalProps)
                 </div>
               )}
 
+              {/* CS Task banner — shown when modal opened from a task */}
+              {task && (
+                <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 space-y-1.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-[10px] font-black text-amber-700 uppercase tracking-wider">CS Task from {task.csName}</p>
+                    <span className="text-[10px] font-bold bg-amber-200 text-amber-800 px-1.5 py-0.5 rounded uppercase">{task.activityType}</span>
+                  </div>
+                  <p className="text-xs text-amber-900 leading-relaxed">{task.notes}</p>
+                  <p className="text-[10px] text-amber-600">{safeFormat(task.date, 'MMM d, yyyy · h:mm a')}</p>
+                </div>
+              )}
+
               {/* Log form — hidden for owner */}
               {role !== 'owner' && <div className="space-y-2">
                 <p className="text-[11px] font-black text-gray-700 uppercase tracking-wider">Log Activity</p>
@@ -624,6 +640,17 @@ export default function CustomerModal({ customer, onClose }: CustomerModalProps)
                     <input type="date" value={followUp} onChange={e => setFollowUp(e.target.value)} className="flex-1 bg-gray-50 border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs text-gray-700 outline-none focus:border-amber-400" />
                   </div>
                 )}
+                {task && (
+                  <label className="flex items-center gap-2 text-xs text-gray-600 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={completeTask}
+                      onChange={e => setCompleteTask(e.target.checked)}
+                      className="rounded"
+                    />
+                    <span>Mark CS task complete when saving</span>
+                  </label>
+                )}
                 <button
                   onClick={handleSave}
                   disabled={!notes.trim() || (!restricted && !logType) || saving}
@@ -634,7 +661,7 @@ export default function CustomerModal({ customer, onClose }: CustomerModalProps)
                     'bg-gray-100 text-gray-400'
                   }`}
                 >
-                  {saved ? '✓ Saved' : saving ? 'Saving…' : !restricted && !logType && notes.trim() ? 'Pick a type to save' : 'Save Activity'}
+                  {saved ? '✓ Saved' : saving ? 'Saving…' : !restricted && !logType && notes.trim() ? 'Pick a type to save' : task && completeTask ? 'Save & Complete Task' : 'Save Activity'}
                 </button>
                 {gasDebug && (
                   <div className="mt-2 rounded-lg border border-gray-200 bg-gray-50 p-2">

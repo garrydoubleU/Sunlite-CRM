@@ -9,23 +9,21 @@ import AssignmentAlert from '../components/AssignmentAlert';
 import CallerDashboard from './CallerDashboard';
 import AdminDashboard from './AdminDashboard';
 import OwnerDashboard from './OwnerDashboard';
-import type { Customer } from '../types';
+import type { Customer, CSHandoff } from '../types';
 
 const TYPE_LABEL: Record<string, string> = { call: 'Phone Call', visit: 'Field Visit', email: 'Email', note: 'Note' };
 
 export default function Dashboard() {
-  const { customers, activities, csHandoffs, ackCSHandoff, addActivity, loadCSHandoffs } = useCustomerStore();
+  const { customers, activities, csHandoffs, loadCSHandoffs } = useCustomerStore();
   const { currentUser } = useAuthStore();
   const role = currentUser?.role ?? 'field_sales';
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
+  const [selectedTask, setSelectedTask] = useState<CSHandoff | undefined>(undefined);
 
   // Refresh CS handoffs every time the dashboard mounts (catches handoffs created after login)
   useEffect(() => { loadCSHandoffs(); }, []);
   const [visitsOpen, setVisitsOpen] = useState(false);
   const [checkInsOpen, setCheckInsOpen] = useState(false);
-  // Per-task completion note state: { [handoffId]: string }
-  const [taskNotes, setTaskNotes] = useState<Record<string, string>>({});
-  const [taskExpanded, setTaskExpanded] = useState<Record<string, boolean>>({});
 
   if (role === 'owner') return <OwnerDashboard />;
   if (role === 'admin') return <AdminDashboard />;
@@ -78,23 +76,6 @@ export default function Dashboard() {
     .sort((a, b) => new Date(a.followUpDate!).getTime() - new Date(b.followUpDate!).getTime())
     .slice(0, 6);
 
-  const handleCompleteTask = (handoffId: string, customerId: string) => {
-    const note = (taskNotes[handoffId] ?? '').trim();
-    if (!note) return;
-    // Log the rep's follow-up as an activity
-    addActivity({
-      id: `task_${Date.now()}`,
-      customerId,
-      type: 'note',
-      date: new Date().toISOString(),
-      repName: currentUser?.name ?? 'Unknown',
-      summary: `[CS Task completed] ${note}`,
-      source: 'manual',
-    });
-    ackCSHandoff(handoffId, note);
-    setTaskNotes(p => { const n = { ...p }; delete n[handoffId]; return n; });
-    setTaskExpanded(p => { const n = { ...p }; delete n[handoffId]; return n; });
-  };
 
   return (
     <div className="space-y-4 max-w-2xl mx-auto">
@@ -134,17 +115,14 @@ export default function Dashboard() {
           <div className="divide-y divide-gray-50">
             {csHandoffs.map(h => {
               const label = TYPE_LABEL[h.activityType ?? 'note'] ?? 'Note';
-              const dateStr = h.date ? new Date(h.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : '';
-              const isExpanded = !!taskExpanded[h.id];
-              const note = taskNotes[h.id] ?? '';
+              const dateStr = safeFormat(h.date, 'MMM d · h:mm a');
               return (
                 <div key={h.id} className="p-4 space-y-2">
-                  {/* Task header */}
                   <div className="flex items-start justify-between gap-2">
                     <div>
                       <button onClick={() => {
                         const c = customers.find(x => x.id === h.customerId || x.name.toLowerCase() === h.customerName.toLowerCase());
-                        if (c) setSelectedCustomer(c);
+                        if (c) { setSelectedCustomer(c); setSelectedTask(h); }
                       }} className="text-sm font-bold text-gray-900 hover:text-amber-700 hover:underline text-left">{h.customerName}</button>
                       <div className="flex items-center gap-2 mt-0.5">
                         <span className="text-[10px] font-bold bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded uppercase tracking-wide">{label}</span>
@@ -152,38 +130,16 @@ export default function Dashboard() {
                       </div>
                     </div>
                     <button
-                      onClick={() => setTaskExpanded(p => ({ ...p, [h.id]: !p[h.id] }))}
-                      className="flex-shrink-0 text-[10px] font-bold text-amber-600 hover:text-amber-700 bg-amber-50 hover:bg-amber-100 px-2 py-1 rounded-lg transition-colors whitespace-nowrap"
+                      onClick={() => {
+                        const c = customers.find(x => x.id === h.customerId || x.name.toLowerCase() === h.customerName.toLowerCase());
+                        if (c) { setSelectedCustomer(c); setSelectedTask(h); }
+                      }}
+                      className="flex-shrink-0 text-[11px] font-bold bg-amber-500 hover:bg-amber-600 text-white px-3 py-1.5 rounded-lg transition-colors whitespace-nowrap shadow-sm"
                     >
-                      {isExpanded ? 'Cancel' : 'Complete'}
+                      Open &amp; Complete
                     </button>
                   </div>
-
-                  {/* CS note */}
                   <p className="text-xs text-gray-700 bg-gray-50 rounded-lg px-3 py-2 leading-relaxed">{h.notes}</p>
-
-                  {/* Complete with note */}
-                  {isExpanded && (
-                    <div className="space-y-2 pt-1">
-                      <textarea
-                        value={note}
-                        onChange={e => setTaskNotes(p => ({ ...p, [h.id]: e.target.value }))}
-                        placeholder="What did you do? (e.g. I called Nitin and he confirmed interest — will visit Thursday)"
-                        rows={2}
-                        autoFocus
-                        className="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-xs text-gray-700 outline-none resize-none focus:border-amber-400 transition-colors"
-                      />
-                      <button
-                        onClick={() => handleCompleteTask(h.id, h.customerId)}
-                        disabled={!note.trim()}
-                        className={`w-full py-2 rounded-lg text-xs font-bold transition-all ${
-                          note.trim() ? 'bg-green-500 hover:bg-green-600 text-white' : 'bg-gray-100 text-gray-400'
-                        }`}
-                      >
-                        Mark Complete & Log Note
-                      </button>
-                    </div>
-                  )}
                 </div>
               );
             })}
@@ -358,7 +314,11 @@ export default function Dashboard() {
       <RoutePlanner onOpenModal={setSelectedCustomer} />
 
       {selectedCustomer && (
-        <CustomerModal customer={selectedCustomer} onClose={() => setSelectedCustomer(null)} />
+        <CustomerModal
+          customer={selectedCustomer}
+          task={selectedTask}
+          onClose={() => { setSelectedCustomer(null); setSelectedTask(undefined); }}
+        />
       )}
     </div>
   );
