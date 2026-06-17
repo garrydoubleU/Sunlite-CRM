@@ -28,6 +28,8 @@ export interface Customer {
   assignedRepName: string;
   territory: string;
   billingAddress: string;
+  city: string;
+  state: string;
   phone: string;
   email: string;
   priorityTier: PriorityTier;

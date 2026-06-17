@@ -31,6 +31,8 @@ function gasCustomerToLocal(c: GASCustomer): Customer {
     assignedRepName: c.assignedRepName,
     territory: c.territory,
     billingAddress: c.billingAddress,
+    city: c.city,
+    state: c.state,
     phone: c.phone,
     email: c.email,
     priorityTier: c.priorityTier as 1 | 2 | 3 | 4,

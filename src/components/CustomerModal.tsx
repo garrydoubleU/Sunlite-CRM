@@ -378,10 +378,12 @@ export default function CustomerModal({ customer, onClose }: CustomerModalProps)
           <div className="flex items-center gap-2 mt-3 flex-wrap">
             <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${tier.bg} ${tier.text}`}>{tier.label}</span>
             {customer.customerClass && <span className="text-[10px] text-blue-300">{customer.customerClass}</span>}
-            {customer.billingAddress && (
+            {(customer.city || customer.state) && (
               <>
                 <span className="text-[10px] text-blue-400">·</span>
-                <span className="text-[10px] text-blue-200">{customer.billingAddress}</span>
+                <span className="text-[10px] text-blue-200">
+                  {[customer.city, customer.state].filter(Boolean).join(', ')}
+                </span>
               </>
             )}
             <span className="text-[10px] text-blue-400">·</span>

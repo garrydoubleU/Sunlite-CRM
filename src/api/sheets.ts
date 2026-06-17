@@ -86,6 +86,8 @@ export interface GASCustomer {
   assignedRepName: string;
   territory: string;
   billingAddress: string;
+  city: string;
+  state: string;
   phone: string;
   email: string;
   priorityTier: number;
@@ -158,6 +160,8 @@ function mapRawCustomer(r: Record<string, unknown>): GASCustomer {
     assignedRepName: String(r.SalespersonName ?? r.RepName ?? r.SalesRepEmail ?? r.SalesRep ?? ''),
     territory: String(r.Territory ?? r.territory ?? ''),
     billingAddress: String(r.Address ?? r.BillingAddress ?? r.address ?? ''),
+    city: String(r.City ?? r.city ?? ''),
+    state: String(r.State ?? r.state ?? ''),
     phone: String(r.Phone ?? r.phone ?? ''),
     email: String(r.Email ?? r.CustomerEmail ?? r.email ?? ''),
     priorityTier: tier as 1 | 2 | 3 | 4,
