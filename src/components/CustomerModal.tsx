@@ -399,9 +399,11 @@ export default function CustomerModal({ customer, onClose, task }: CustomerModal
             <span className="text-[10px] text-blue-200">{customer.openOrderCount} open order{customer.openOrderCount !== 1 ? 's' : ''}</span>
             <span className="text-[10px] text-blue-400">·</span>
             <span className="text-[10px] text-blue-200 flex items-center gap-1">
-              <div className="w-4 h-4 rounded-full bg-amber-500 flex items-center justify-center text-white text-[8px] font-bold">
-                {customer.assignedRepName.split(' ').map(n => n[0]).join('').slice(0,2)}
-              </div>
+              {customer.customerClass ? (
+                <span className="bg-white/20 text-white text-[9px] font-bold px-2 py-0.5 rounded-full">
+                  {customer.customerClass}
+                </span>
+              ) : null}
               {customer.assignedRepName.split(' ')[0]}
             </span>
           </div>
