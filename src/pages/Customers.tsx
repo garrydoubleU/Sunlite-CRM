@@ -197,7 +197,7 @@ export default function Customers() {
         {filtered.length} account{filtered.length !== 1 ? 's' : ''}
       </p>
 
-      {/* Grid — uses same `filtered` array, no indirection */}
+      {/* Grid — keyed on active filters so React fully replaces it on any change */}
       {filtered.length === 0 ? (
         <div className="text-center py-16">
           {isRep && bookFilter === 'pending' ? (
@@ -214,10 +214,13 @@ export default function Customers() {
           )}
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filtered.map((c, i) => (
+        <div
+          key={`${bookFilter}|${tierFilter}|${freqFilter}|${repFilter}|${search}`}
+          className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"
+        >
+          {filtered.map(c => (
             <CustomerCard
-              key={c.id || `row-${i}`}
+              key={c.id}
               customer={c}
               onOpenModal={() => setSelectedCustomer(c)}
             />
