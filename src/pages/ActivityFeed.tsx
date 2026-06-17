@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react';
 import { Phone, MapPin, FileText, Mail } from 'lucide-react';
 import { format, parseISO, isToday, isYesterday, isThisWeek } from 'date-fns';
 import { useCustomerStore } from '../store/customerStore';
+import { useAuthStore } from '../store/authStore';
 import type { ActivityType } from '../types';
 
 const TYPE_CONFIG: Record<ActivityType, { icon: React.ElementType; color: string; label: string }> = {
@@ -21,12 +22,18 @@ function getDateGroup(dateStr: string): string {
 
 export default function ActivityFeed() {
   const { activities, customers } = useCustomerStore();
+  const { currentUser } = useAuthStore();
+  const role = currentUser?.role ?? 'field_sales';
+  const seesAll = role === 'admin' || role === 'owner';
+  const myName = currentUser?.name ?? '';
+
   const [typeFilter, setTypeFilter] = useState<'all' | ActivityType>('all');
   const [sourceFilter, setSourceFilter] = useState<'all' | 'manual' | 'gmail-auto'>('all');
 
   const sorted = useMemo(() => {
     return [...activities]
       .filter(a => {
+        if (!seesAll && a.repName !== myName) return false;
         if (typeFilter !== 'all' && a.type !== typeFilter) return false;
         if (sourceFilter !== 'all' && (a.source ?? 'manual') !== sourceFilter) return false;
         return true;

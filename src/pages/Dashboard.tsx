@@ -56,7 +56,10 @@ export default function Dashboard() {
   const weekStart = new Date(now);
   weekStart.setHours(0, 0, 0, 0);
   weekStart.setDate(now.getDate() - (now.getDay() === 0 ? 6 : now.getDay() - 1));
-  const thisWeekActivities = activities.filter(a => new Date(a.date) >= weekStart);
+  const myName = currentUser?.name ?? '';
+  const thisWeekActivities = activities.filter(a =>
+    new Date(a.date) >= weekStart && a.repName === myName
+  );
   const weekCalls = thisWeekActivities.filter(a => a.type === 'call').length;
   const weekVisits = thisWeekActivities.filter(a => a.type === 'visit').length;
   const weekEmails = thisWeekActivities.filter(a => a.type === 'email').length;
