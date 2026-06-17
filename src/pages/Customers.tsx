@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Search, X } from 'lucide-react';
 import { useCustomerStore } from '../store/customerStore';
 import { useAuthStore } from '../store/authStore';
@@ -11,8 +11,9 @@ type TierFilter = 'all' | '1' | '2' | '3' | '4';
 type FreqFilter = 'all' | VisitFrequency;
 
 export default function Customers() {
-  const { customers, directory, accessRequests } = useCustomerStore();
+  const { customers, directory, accessRequests, lastSync, isSyncing } = useCustomerStore();
   const { currentUser } = useAuthStore();
+  const isLoading = lastSync === null && isSyncing;
   const role = currentUser?.role ?? 'field_sales';
   const myEmail = currentUser?.email ?? '';
 
@@ -33,6 +34,16 @@ export default function Customers() {
   const [freqFilter, setFreqFilter]   = useState<FreqFilter>('all');
   const [repFilter, setRepFilter]     = useState<string>('all');
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
+
+  // Reset filters when real data replaces mock data (lastSync goes from null → date)
+  useEffect(() => {
+    if (lastSync !== null) {
+      setSearch('');
+      setTierFilter('all');
+      setFreqFilter('all');
+      setRepFilter('all');
+    }
+  }, [lastSync]);
 
   // Rep names list — only meaningful for CS/owner
   const repNames = useMemo(() => {
@@ -89,6 +100,15 @@ export default function Customers() {
   }
 
   const hasFilters = !!(search || tierFilter !== 'all' || freqFilter !== 'all' || repFilter !== 'all');
+
+  if (isLoading) {
+    return (
+      <div className="flex flex-col items-center justify-center py-24 gap-3">
+        <div className="w-8 h-8 border-4 border-amber-500 border-t-transparent rounded-full animate-spin" />
+        <p className="text-sm text-gray-400">Loading accounts…</p>
+      </div>
+    );
+  }
 
   return (
     <div>
