@@ -5,6 +5,8 @@ export interface Contact {
   firstName?: string;
   lastName?: string;
   position?: string;
+  phone?: string;
+  ext?: string;
 }
 export type VisitFrequency = 'weekly' | 'biweekly' | 'monthly' | '';
 export type ActivityType = 'note' | 'call' | 'visit' | 'email';

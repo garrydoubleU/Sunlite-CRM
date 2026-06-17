@@ -113,7 +113,7 @@ export default function CustomerModal({ customer, onClose }: CustomerModalProps)
   const [contacts, setContacts] = useState<Contact[]>(parseContacts(customer.email ?? ''));
   const [addingContact, setAddingContact] = useState(false);
   const [savingContact, setSavingContact] = useState(false);
-  const [newContact, setNewContact] = useState<Contact>({ email: '', firstName: '', lastName: '', position: '' });
+  const [newContact, setNewContact] = useState<Contact>({ email: '', firstName: '', lastName: '', position: '', phone: '', ext: '' });
 
   const persistContacts = async (list: Contact[]) => {
     const serialized = JSON.stringify(list);
@@ -131,6 +131,8 @@ export default function CustomerModal({ customer, onClose }: CustomerModalProps)
       ...(newContact.firstName?.trim() ? { firstName: newContact.firstName.trim() } : {}),
       ...(newContact.lastName?.trim() ? { lastName: newContact.lastName.trim() } : {}),
       ...(newContact.position?.trim() ? { position: newContact.position.trim() } : {}),
+      ...(newContact.phone?.trim() ? { phone: newContact.phone.trim() } : {}),
+      ...(newContact.ext?.trim() ? { ext: newContact.ext.trim() } : {}),
     };
     const next = [...contacts.filter(c => c.email !== entry.email), entry];
     setContacts(next);
@@ -147,7 +149,7 @@ export default function CustomerModal({ customer, onClose }: CustomerModalProps)
       }).catch(() => {});
     }
     setSavingContact(false);
-    setNewContact({ email: '', firstName: '', lastName: '', position: '' });
+    setNewContact({ email: '', firstName: '', lastName: '', position: '', phone: '', ext: '' });
     setAddingContact(false);
     if (!emailTo) setEmailTo(entry.email);
   };
@@ -288,12 +290,12 @@ export default function CustomerModal({ customer, onClose }: CustomerModalProps)
     : isOwner
     ? [
         { id: 'activity' as const, label: 'Activity' },
-        ...(revenueTable.length > 0 ? [{ id: 'revenue' as const, label: 'Revenue' }] : []),
+        { id: 'revenue' as const, label: 'Revenue' },
       ]
     : [
         { id: 'activity' as const, label: 'Activity' },
         { id: 'schedule' as const, label: 'Schedule' },
-        ...(revenueTable.length > 0 ? [{ id: 'revenue' as const, label: 'Revenue' }] : []),
+        { id: 'revenue' as const, label: 'Revenue' },
       ];
 
   return createPortal(
@@ -340,6 +342,10 @@ export default function CustomerModal({ customer, onClose }: CustomerModalProps)
                       <input value={newContact.lastName ?? ''} onChange={e => setNewContact(p => ({...p, lastName: e.target.value}))} placeholder="Last name" className="bg-white/10 text-white text-xs rounded-md px-2 py-1 outline-none border border-white/20 focus:border-amber-400 placeholder-blue-300/50" />
                     </div>
                     <input value={newContact.position ?? ''} onChange={e => setNewContact(p => ({...p, position: e.target.value}))} placeholder="Position (e.g. Buyer, Owner)" className="w-full bg-white/10 text-white text-xs rounded-md px-2 py-1 outline-none border border-white/20 focus:border-amber-400 placeholder-blue-300/50" />
+                    <div className="grid grid-cols-3 gap-1">
+                      <input value={newContact.phone ?? ''} onChange={e => setNewContact(p => ({...p, phone: e.target.value}))} placeholder="Phone" className="col-span-2 bg-white/10 text-white text-xs rounded-md px-2 py-1 outline-none border border-white/20 focus:border-amber-400 placeholder-blue-300/50" />
+                      <input value={newContact.ext ?? ''} onChange={e => setNewContact(p => ({...p, ext: e.target.value}))} placeholder="Ext." className="bg-white/10 text-white text-xs rounded-md px-2 py-1 outline-none border border-white/20 focus:border-amber-400 placeholder-blue-300/50" />
+                    </div>
                     <input
                       value={newContact.email}
                       onChange={e => setNewContact(p => ({...p, email: e.target.value}))}
@@ -372,6 +378,12 @@ export default function CustomerModal({ customer, onClose }: CustomerModalProps)
           <div className="flex items-center gap-2 mt-3 flex-wrap">
             <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${tier.bg} ${tier.text}`}>{tier.label}</span>
             {customer.customerClass && <span className="text-[10px] text-blue-300">{customer.customerClass}</span>}
+            {customer.billingAddress && (
+              <>
+                <span className="text-[10px] text-blue-400">·</span>
+                <span className="text-[10px] text-blue-200">{customer.billingAddress}</span>
+              </>
+            )}
             <span className="text-[10px] text-blue-400">·</span>
             <span className="text-[10px] text-blue-200 flex items-center gap-1">
               <Clock size={9} />
