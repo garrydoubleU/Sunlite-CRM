@@ -56,6 +56,8 @@ function gasActivityToLocal(a: GASActivity): Activity {
     repName: a.repName,
     summary: a.summary,
     source: a.source ?? 'manual',
+    ...(a.followUpDate ? { followUpDate: a.followUpDate } : {}),
+    ...(a.notifyRep ? { notifyRep: a.notifyRep } : {}),
   };
 }
 
