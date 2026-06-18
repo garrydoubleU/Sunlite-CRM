@@ -1,10 +1,10 @@
 import { type ReactNode, useState } from 'react';
-import { LayoutDashboard, Users, MessageSquare, Link2, LogOut, Bell, RefreshCw, Menu, X, Mail, Settings, BarChart2 } from 'lucide-react';
+import { LayoutDashboard, Users, MessageSquare, Link2, LogOut, Bell, RefreshCw, Menu, X, Mail, Settings, BarChart2, BookOpen } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import { useCustomerStore } from '../store/customerStore';
 import NotificationCenter from './NotificationCenter';
 
-type Page = 'dashboard' | 'customers' | 'activity' | 'quicklinks' | 'settings' | 'reports';
+type Page = 'dashboard' | 'customers' | 'activity' | 'quicklinks' | 'settings' | 'reports' | 'directory';
 
 interface LayoutProps {
   children: ReactNode;
@@ -28,6 +28,11 @@ export default function Layout({ children, currentPage, onNavigate }: LayoutProp
         BASE_NAV_ITEMS[0],
         { id: 'reports' as Page, label: 'Reports', icon: BarChart2 },
         ...BASE_NAV_ITEMS.slice(1),
+      ]
+    : currentUser?.role === 'field_sales'
+    ? [
+        ...BASE_NAV_ITEMS,
+        { id: 'directory' as Page, label: 'Directory', icon: BookOpen },
       ]
     : BASE_NAV_ITEMS;
   const { isSyncing, triggerSync, syncEmails, isSyncingEmails } = useCustomerStore();
