@@ -13,10 +13,9 @@ import ActivityFeed from './pages/ActivityFeed';
 import QuickLinksPage from './pages/QuickLinksPage';
 import SettingsPage from './pages/SettingsPage';
 import ReportsPage from './pages/ReportsPage';
-import Directory from './pages/Directory';
 import { useGmailSilentAuth } from './hooks/useGmailSilentAuth';
 
-type Page = 'dashboard' | 'customers' | 'activity' | 'quicklinks' | 'settings' | 'reports' | 'directory';
+type Page = 'dashboard' | 'customers' | 'activity' | 'quicklinks' | 'settings' | 'reports';
 
 function App() {
   const { isAuthenticated } = useAuthStore();
@@ -47,7 +46,6 @@ function App() {
       case 'quicklinks': return <QuickLinksPage />;
       case 'settings': return <SettingsPage />;
       case 'reports': return <ReportsPage />;
-      case 'directory': return <Directory />;
     }
   };
 
