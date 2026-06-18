@@ -73,9 +73,9 @@ export default function Dashboard() {
     .sort((a, b) => a.next.getTime() - b.next.getTime())
     .slice(0, 6);
 
-  // ── Upcoming follow-ups ────────────────────────────────────────
+  // ── Upcoming follow-ups (scoped to current user) ──────────────
   const upcomingFollowUps = activities
-    .filter(a => a.followUpDate && new Date(a.followUpDate) >= now)
+    .filter(a => a.followUpDate && new Date(a.followUpDate) >= now && (!myName || a.repName === myName))
     .sort((a, b) => new Date(a.followUpDate!).getTime() - new Date(b.followUpDate!).getTime())
     .slice(0, 6);
 
@@ -88,7 +88,7 @@ export default function Dashboard() {
       <div className="grid grid-cols-4 gap-3">
         {[
           { label: 'Open Tasks', count: csHandoffs.length, color: csHandoffs.length > 0 ? 'text-amber-600' : 'text-gray-400', bg: csHandoffs.length > 0 ? 'bg-amber-50 border-amber-200' : 'bg-white border-gray-100' },
-          { label: 'Visits Today', count: visitsToday, color: 'text-green-600', bg: 'bg-white border-gray-100' },
+          { label: 'Follow-ups', count: upcomingFollowUps.length, color: upcomingFollowUps.length > 0 ? 'text-amber-600' : 'text-gray-400', bg: upcomingFollowUps.length > 0 ? 'bg-amber-50 border-amber-200' : 'bg-white border-gray-100' },
           { label: 'Need Outreach', count: visitsDue.length + checkInsNeeded.length, color: visitsDue.length + checkInsNeeded.length > 0 ? 'text-red-500' : 'text-gray-400', bg: visitsDue.length + checkInsNeeded.length > 0 ? 'bg-red-50 border-red-100' : 'bg-white border-gray-100' },
           { label: 'Calls Today', count: callsToday, color: 'text-blue-600', bg: 'bg-white border-gray-100' },
         ].map(({ label, count, color, bg }) => (

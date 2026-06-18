@@ -639,7 +639,10 @@ export default function CustomerModal({ customer, onClose, task }: CustomerModal
                       </select>
                       <ChevronDown size={10} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
                     </div>
-                    <input type="date" value={followUp} onChange={e => setFollowUp(e.target.value)} className="flex-1 bg-gray-50 border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs text-gray-700 outline-none focus:border-amber-400" />
+                    <div className="flex-1 relative">
+                      <label className="absolute -top-4 left-0 text-[9px] font-bold text-gray-400 uppercase tracking-wider">Follow-up date</label>
+                      <input type="date" value={followUp} onChange={e => setFollowUp(e.target.value)} className="w-full bg-gray-50 border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs text-gray-700 outline-none focus:border-amber-400" />
+                    </div>
                   </div>
                 )}
                 {task && (

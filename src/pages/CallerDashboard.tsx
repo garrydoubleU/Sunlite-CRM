@@ -141,9 +141,9 @@ export default function CallerDashboard() {
       d.getDate() === now.getDate();
   });
 
-  // Follow-ups: any customer with a future (or overdue) follow-up date set
+  // Follow-ups: my follow-up dates (scoped to current user)
   const followUpMap = new Map<string, string>(); // customerId → followUpDate
-  activities.forEach(a => {
+  activities.filter(a => !myName || a.repName === myName).forEach(a => {
     if (!a.followUpDate) return;
     const existing = followUpMap.get(a.customerId);
     // Keep the most recent follow-up date per customer
