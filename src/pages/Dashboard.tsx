@@ -50,7 +50,7 @@ export default function Dashboard() {
   const todayStart = new Date(now); todayStart.setHours(0, 0, 0, 0);
   const todayActivities = activities.filter(a => new Date(a.date) >= todayStart);
   const callsToday = todayActivities.filter(a => a.type === 'call').length;
-  const visitsToday = todayActivities.filter(a => a.type === 'visit').length;
+
 
   // ── This week stats ────────────────────────────────────────────
   const weekStart = new Date(now);
