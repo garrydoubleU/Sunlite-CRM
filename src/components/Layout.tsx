@@ -143,6 +143,13 @@ export default function Layout({ children, currentPage, onNavigate }: LayoutProp
       {/* ── Main content area ─────────────────────────────────── */}
       <div className="flex-1 flex flex-col overflow-hidden min-w-0">
 
+        {/* Loading progress bar */}
+        {isSyncing && (
+          <div className="h-1 bg-amber-100 flex-shrink-0 overflow-hidden relative">
+            <div className="absolute inset-y-0 bg-amber-400" style={{ animation: 'progress 1.6s ease-in-out infinite', width: '45%' }} />
+          </div>
+        )}
+
         {/* Header */}
         <header className="h-14 md:h-16 bg-white border-b border-gray-100 flex items-center justify-between px-4 md:px-6 flex-shrink-0">
           <div className="flex items-center gap-3">

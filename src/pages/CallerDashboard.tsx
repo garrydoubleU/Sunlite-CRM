@@ -143,15 +143,19 @@ export default function CallerDashboard() {
   });
 
   // Follow-ups: my follow-up dates (scoped to current user), from today onwards
+  // NOTE: activity.customerId may be customer name OR numeric ID — resolve to ID first
   const todayMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const followUpMap = new Map<string, string>(); // customerId → soonest upcoming followUpDate
+  const followUpMap = new Map<string, string>(); // customer.id → soonest upcoming followUpDate
   activities.filter(a => !myName || a.repName === myName).forEach(a => {
     if (!a.followUpDate) return;
-    if (new Date(a.followUpDate) < todayMidnight) return; // skip past due
-    const existing = followUpMap.get(a.customerId);
-    // Keep the soonest upcoming follow-up date per customer
+    if (new Date(a.followUpDate) < todayMidnight) return;
+    const customer = customers.find(c =>
+      c.id === a.customerId || c.name.toLowerCase() === a.customerId.toLowerCase()
+    );
+    if (!customer) return;
+    const existing = followUpMap.get(customer.id);
     if (!existing || new Date(a.followUpDate) < new Date(existing)) {
-      followUpMap.set(a.customerId, a.followUpDate);
+      followUpMap.set(customer.id, a.followUpDate);
     }
   });
 
