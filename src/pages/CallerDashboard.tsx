@@ -146,17 +146,23 @@ export default function CallerDashboard() {
 
   // Follow-ups: my follow-up dates (scoped to current user), from today onwards
   // Auto-resolved if a newer activity was logged on/after the follow-up date
+  // parseLocalDate: treat YYYY-MM-DD strings as LOCAL midnight, not UTC midnight
+  const parseLocalDate = (s: string) => {
+    const base = s.split('T')[0];
+    const [y, m, d] = base.split('-').map(Number);
+    return new Date(y, m - 1, d);
+  };
   const todayMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const followUpMap = new Map<string, string>(); // customer.id → soonest upcoming followUpDate
   activities.filter(a => !myName || a.repName === myName).forEach(a => {
     if (!a.followUpDate) return;
-    if (new Date(a.followUpDate) < todayMidnight) return;
+    if (parseLocalDate(a.followUpDate) < todayMidnight) return; // skip genuinely past dates
     const customer = customers.find(c =>
       c.id === a.customerId || c.name.toLowerCase() === a.customerId.toLowerCase()
     );
     if (!customer) return;
     // Auto-resolve: skip if there's a newer activity on/after the follow-up date
-    const followUpTime = new Date(a.followUpDate).getTime();
+    const followUpTime = parseLocalDate(a.followUpDate).getTime();
     const hasNewerLog = activities.some(b =>
       b.id !== a.id &&
       (b.customerId === customer.id || b.customerId.toLowerCase() === customer.name.toLowerCase()) &&
@@ -165,7 +171,7 @@ export default function CallerDashboard() {
     );
     if (hasNewerLog) return;
     const existing = followUpMap.get(customer.id);
-    if (!existing || new Date(a.followUpDate) < new Date(existing)) {
+    if (!existing || parseLocalDate(a.followUpDate) < parseLocalDate(existing)) {
       followUpMap.set(customer.id, a.followUpDate);
     }
   });
@@ -173,8 +179,8 @@ export default function CallerDashboard() {
   const followUpCustomers = customers
     .filter(c => c.activeStatus && followUpMap.has(c.id) && !dismissedFollowUps.has(c.id))
     .sort((a, b) => {
-      const da = new Date(followUpMap.get(a.id)!).getTime();
-      const db = new Date(followUpMap.get(b.id)!).getTime();
+      const da = parseLocalDate(followUpMap.get(a.id)!).getTime();
+      const db = parseLocalDate(followUpMap.get(b.id)!).getTime();
       return da - db;
     });
 

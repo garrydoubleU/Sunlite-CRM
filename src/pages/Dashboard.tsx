@@ -74,10 +74,11 @@ export default function Dashboard() {
     .slice(0, 6);
 
   // ── Upcoming follow-ups (scoped to current user) ──────────────
-  // Compare against start of today so midnight-UTC dates from GAS aren't missed
+  // Parse date-only strings as LOCAL midnight to avoid UTC timezone shift
+  const parseLocalDate = (s: string) => { const [y, m, d] = s.split('T')[0].split('-').map(Number); return new Date(y, m - 1, d); };
   const upcomingFollowUps = activities
-    .filter(a => a.followUpDate && new Date(a.followUpDate) >= todayStart && (!myName || a.repName === myName))
-    .sort((a, b) => new Date(a.followUpDate!).getTime() - new Date(b.followUpDate!).getTime())
+    .filter(a => a.followUpDate && parseLocalDate(a.followUpDate) >= todayStart && (!myName || a.repName === myName))
+    .sort((a, b) => parseLocalDate(a.followUpDate!).getTime() - parseLocalDate(b.followUpDate!).getTime())
     .slice(0, 8);
 
 
