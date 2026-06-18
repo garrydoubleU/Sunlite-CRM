@@ -74,10 +74,11 @@ export default function Dashboard() {
     .slice(0, 6);
 
   // ── Upcoming follow-ups (scoped to current user) ──────────────
+  // Compare against start of today so midnight-UTC dates from GAS aren't missed
   const upcomingFollowUps = activities
-    .filter(a => a.followUpDate && new Date(a.followUpDate) >= now && (!myName || a.repName === myName))
+    .filter(a => a.followUpDate && new Date(a.followUpDate) >= todayStart && (!myName || a.repName === myName))
     .sort((a, b) => new Date(a.followUpDate!).getTime() - new Date(b.followUpDate!).getTime())
-    .slice(0, 6);
+    .slice(0, 8);
 
 
   return (
@@ -292,7 +293,7 @@ export default function Dashboard() {
               const customer = customers.find(c =>
                 c.id === act.customerId || c.name.toLowerCase() === act.customerId.toLowerCase()
               );
-              const daysUntil = Math.ceil((new Date(act.followUpDate!).getTime() - now.getTime()) / 86400000);
+              const daysUntil = Math.round((new Date(act.followUpDate!).getTime() - todayStart.getTime()) / 86400000);
               return (
                 <button key={act.id} onClick={() => customer && setSelectedCustomer(customer)}
                   className="w-full flex items-center gap-3 p-3 rounded-xl bg-amber-50 border border-amber-100 hover:bg-amber-100 transition-colors text-left">

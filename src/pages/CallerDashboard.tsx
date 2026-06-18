@@ -31,8 +31,9 @@ function CallerCard({
   isContacted?: boolean;
 }) {
   const tier = TIER_STYLE[customer.priorityTier] ?? TIER_STYLE[5];
+  const todayMs = new Date(new Date().setHours(0, 0, 0, 0)).getTime();
   const daysUntilFollowUp = followUpDate
-    ? Math.ceil((new Date(followUpDate).getTime() - Date.now()) / 86400000)
+    ? Math.round((new Date(followUpDate).getTime() - todayMs) / 86400000)
     : null;
 
   return (
@@ -141,13 +142,15 @@ export default function CallerDashboard() {
       d.getDate() === now.getDate();
   });
 
-  // Follow-ups: my follow-up dates (scoped to current user)
-  const followUpMap = new Map<string, string>(); // customerId → followUpDate
+  // Follow-ups: my follow-up dates (scoped to current user), from today onwards
+  const todayMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const followUpMap = new Map<string, string>(); // customerId → soonest upcoming followUpDate
   activities.filter(a => !myName || a.repName === myName).forEach(a => {
     if (!a.followUpDate) return;
+    if (new Date(a.followUpDate) < todayMidnight) return; // skip past due
     const existing = followUpMap.get(a.customerId);
-    // Keep the most recent follow-up date per customer
-    if (!existing || new Date(a.followUpDate) > new Date(existing)) {
+    // Keep the soonest upcoming follow-up date per customer
+    if (!existing || new Date(a.followUpDate) < new Date(existing)) {
       followUpMap.set(a.customerId, a.followUpDate);
     }
   });

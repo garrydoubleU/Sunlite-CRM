@@ -278,7 +278,7 @@ export default function AdminDashboard() {
                   const customer = customers.find(c =>
                     c.id === act.customerId || c.name.toLowerCase() === act.customerId.toLowerCase()
                   );
-                  const daysUntil = Math.ceil((new Date(act.followUpDate!).getTime() - now.getTime()) / 86400000);
+                  const daysUntil = Math.round((new Date(act.followUpDate!).getTime() - today.getTime()) / 86400000);
                   return (
                     <button
                       key={act.id}
