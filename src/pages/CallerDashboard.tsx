@@ -116,6 +116,8 @@ export default function CallerDashboard() {
   const { currentUser } = useAuthStore();
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [expandedPriority, setExpandedPriority] = useState<number | null>(1);
+  const [followUpsExpanded, setFollowUpsExpanded] = useState(true);
+  const [dismissedFollowUps, setDismissedFollowUps] = useState<Set<string>>(new Set());
   const [mainTab, setMainTab] = useState<'queue' | 'tasks'>('queue');
   const now = new Date();
 
@@ -143,7 +145,7 @@ export default function CallerDashboard() {
   });
 
   // Follow-ups: my follow-up dates (scoped to current user), from today onwards
-  // NOTE: activity.customerId may be customer name OR numeric ID — resolve to ID first
+  // Auto-resolved if a newer activity was logged on/after the follow-up date
   const todayMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const followUpMap = new Map<string, string>(); // customer.id → soonest upcoming followUpDate
   activities.filter(a => !myName || a.repName === myName).forEach(a => {
@@ -153,6 +155,15 @@ export default function CallerDashboard() {
       c.id === a.customerId || c.name.toLowerCase() === a.customerId.toLowerCase()
     );
     if (!customer) return;
+    // Auto-resolve: skip if there's a newer activity on/after the follow-up date
+    const followUpTime = new Date(a.followUpDate).getTime();
+    const hasNewerLog = activities.some(b =>
+      b.id !== a.id &&
+      (b.customerId === customer.id || b.customerId.toLowerCase() === customer.name.toLowerCase()) &&
+      (!myName || b.repName === myName) &&
+      new Date(b.date).getTime() >= followUpTime
+    );
+    if (hasNewerLog) return;
     const existing = followUpMap.get(customer.id);
     if (!existing || new Date(a.followUpDate) < new Date(existing)) {
       followUpMap.set(customer.id, a.followUpDate);
@@ -160,7 +171,7 @@ export default function CallerDashboard() {
   });
 
   const followUpCustomers = customers
-    .filter(c => c.activeStatus && followUpMap.has(c.id))
+    .filter(c => c.activeStatus && followUpMap.has(c.id) && !dismissedFollowUps.has(c.id))
     .sort((a, b) => {
       const da = new Date(followUpMap.get(a.id)!).getTime();
       const db = new Date(followUpMap.get(b.id)!).getTime();
@@ -309,27 +320,45 @@ export default function CallerDashboard() {
       {/* Follow-ups section */}
       {followUpCustomers.length > 0 && (
         <div className="bg-white rounded-2xl border border-amber-200 shadow-sm overflow-hidden">
-          <div className="px-4 py-3 bg-amber-50 border-b border-amber-200 flex items-center justify-between">
+          <button
+            className="w-full px-4 py-3 bg-amber-50 border-b border-amber-200 flex items-center justify-between hover:bg-amber-100 transition-colors"
+            onClick={() => setFollowUpsExpanded(v => !v)}
+          >
             <div className="flex items-center gap-2">
               <Clock size={14} className="text-amber-600" />
               <p className="text-xs font-black text-amber-700 uppercase tracking-wider">Follow-ups Due</p>
             </div>
-            <span className="text-[10px] font-bold bg-amber-500 text-white px-2 py-0.5 rounded-full">
-              {followUpCustomers.length}
-            </span>
-          </div>
-          <div className="p-3 space-y-2">
-            {followUpCustomers.map(c => (
-              <CallerCard
-                key={c.id}
-                customer={c}
-                daysAgo={effectiveDaysAgo(c)}
-                followUpDate={followUpMap.get(c.id)}
-                onOpen={() => setSelectedCustomer(c)}
-                isFollowUp
-              />
-            ))}
-          </div>
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] font-bold bg-amber-500 text-white px-2 py-0.5 rounded-full">
+                {followUpCustomers.length}
+              </span>
+              {followUpsExpanded ? <ChevronUp size={15} className="text-amber-500" /> : <ChevronDown size={15} className="text-amber-500" />}
+            </div>
+          </button>
+          {followUpsExpanded && (
+            <div className="p-3 space-y-2">
+              {followUpCustomers.map(c => (
+                <div key={c.id} className="flex items-center gap-2">
+                  <div className="flex-1">
+                    <CallerCard
+                      customer={c}
+                      daysAgo={effectiveDaysAgo(c)}
+                      followUpDate={followUpMap.get(c.id)}
+                      onOpen={() => setSelectedCustomer(c)}
+                      isFollowUp
+                    />
+                  </div>
+                  <button
+                    onClick={() => setDismissedFollowUps(prev => new Set([...prev, c.id]))}
+                    className="flex-shrink-0 w-9 h-9 rounded-xl bg-green-100 flex items-center justify-center text-green-600 hover:bg-green-200 transition-colors"
+                    title="Mark as done"
+                  >
+                    <CheckCircle size={15} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
