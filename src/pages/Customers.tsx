@@ -5,27 +5,26 @@ import { useAuthStore } from '../store/authStore';
 import CustomerCard from '../components/CustomerCard';
 import CustomerModal from '../components/CustomerModal';
 import type { Customer, VisitFrequency } from '../types';
-import toast from 'react-hot-toast';
-
 type BookFilter = 'mine' | 'pending' | 'directory';
 type HouseFilter = 'all' | 'mine' | 'house';
 type TierFilter = 'all' | '1' | '2' | '3' | '4';
 type FreqFilter = 'all' | VisitFrequency;
 
-function isHouseAccount(c: Customer, myEmail: string): boolean {
-  const cls = (c.customerClass || '').toLowerCase();
-  if (cls.includes('house')) return true;
-  // Also treat as house if the rep's own email isn't among the assigned reps
+function isHouseAccount(c: Customer): boolean {
+  return (c.customerClass || '').toLowerCase().includes('house');
+}
+
+function isPersonalAccount(c: Customer, myEmail: string): boolean {
   const reps = (c.assignedRepId || '')
     .toLowerCase()
     .split(/[,;\s]+/)
     .map(s => s.trim())
     .filter(Boolean);
-  return reps.length > 0 && !reps.includes(myEmail);
+  return reps.includes(myEmail);
 }
 
 export default function Customers() {
-  const { customers, directory, accessRequests, lastSync, isSyncing, requestAccess } = useCustomerStore();
+  const { customers, directory, accessRequests, lastSync, isSyncing } = useCustomerStore();
   const { currentUser } = useAuthStore();
 
   const role    = currentUser?.role ?? 'field_sales';
@@ -42,8 +41,6 @@ export default function Customers() {
   const [freqFilter,  setFreqFilter]  = useState<FreqFilter>('all');
   const [repFilter,   setRepFilter]   = useState<string>('all');
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
-  const [requestingIds, setRequestingIds] = useState<Set<string>>(new Set());
-
   const dirResults = useMemo(() => {
     const q = dirSearch.trim().toLowerCase();
     if (!q) return [];
@@ -61,19 +58,6 @@ export default function Customers() {
     setTierFilter('all');
     setFreqFilter('all');
     setRepFilter('all');
-  }
-
-  async function handleRequestAccount(c: Customer, e: React.MouseEvent) {
-    e.stopPropagation();
-    setRequestingIds(prev => new Set(prev).add(c.id));
-    try {
-      await requestAccess(c);
-      toast.success(`Request sent for ${c.name}`);
-    } catch {
-      toast.error('Request failed — try again');
-    } finally {
-      setRequestingIds(prev => { const s = new Set(prev); s.delete(c.id); return s; });
-    }
   }
 
   // ── Show spinner while first GAS load is in progress ──────────
@@ -105,10 +89,10 @@ export default function Customers() {
     base = fullDir;
   }
 
-  // House sub-filter (only on "mine" tab for reps)
-  if (isRep && bookFilter === 'mine' && houseFilter !== 'all') {
+  // House sub-filter (only on "mine" tab for inside_sales)
+  if (role === 'inside_sales' && bookFilter === 'mine' && houseFilter !== 'all') {
     base = base.filter(c =>
-      houseFilter === 'house' ? isHouseAccount(c, myEmail) : !isHouseAccount(c, myEmail)
+      houseFilter === 'house' ? isHouseAccount(c) : isPersonalAccount(c, myEmail)
     );
   }
 
@@ -142,12 +126,8 @@ export default function Customers() {
   }
 
   // Counts for house filter badges
-  const houseCount = isRep && bookFilter === 'mine'
-    ? customers.filter(c => isHouseAccount(c, myEmail)).length
-    : 0;
-  const mineCount = isRep && bookFilter === 'mine'
-    ? customers.filter(c => !isHouseAccount(c, myEmail)).length
-    : 0;
+  const houseCount = role === 'inside_sales' ? customers.filter(c => isHouseAccount(c)).length : 0;
+  const mineCount  = role === 'inside_sales' ? customers.filter(c => isPersonalAccount(c, myEmail)).length : 0;
 
   const hasFilters = !!(search || tierFilter !== 'all' || freqFilter !== 'all' || repFilter !== 'all');
   const pendingCount = pendingIds.size;
@@ -365,32 +345,9 @@ export default function Customers() {
           key={`${bookFilter}|${houseFilter}|${tierFilter}|${freqFilter}|${repFilter}|${search}`}
           className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"
         >
-          {filtered.map(c => {
-            const house = isRep && bookFilter === 'mine' && isHouseAccount(c, myEmail);
-            const alreadyRequested = pendingIds.has(c.id);
-            return (
-              <div key={c.id} className="relative">
-                <CustomerCard customer={c} onOpenModal={() => setSelectedCustomer(c)} />
-                {house && (
-                  <div className="absolute top-2 right-2">
-                    {alreadyRequested ? (
-                      <span className="text-[10px] font-bold px-2 py-1 bg-gray-100 text-gray-400 rounded-full">
-                        Requested
-                      </span>
-                    ) : (
-                      <button
-                        onClick={e => handleRequestAccount(c, e)}
-                        disabled={requestingIds.has(c.id)}
-                        className="text-[10px] font-bold px-2 py-1 bg-blue-500 hover:bg-blue-600 text-white rounded-full transition-colors disabled:opacity-50"
-                      >
-                        {requestingIds.has(c.id) ? '…' : 'Request Account'}
-                      </button>
-                    )}
-                  </div>
-                )}
-              </div>
-            );
-          })}
+          {filtered.map(c => (
+            <CustomerCard key={c.id} customer={c} onOpenModal={() => setSelectedCustomer(c)} />
+          ))}
         </div>
       )}
 

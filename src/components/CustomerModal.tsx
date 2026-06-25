@@ -85,7 +85,11 @@ export default function CustomerModal({ customer, onClose, task }: CustomerModal
     setTimeout(() => { setAssignedDone(false); setShowAssign(false); }, 1800);
   };
 
-  // Request-access state (restricted reps)
+  // House account: inside_sales sees a "Request Account" button
+  const isHouseAccount = (customer.customerClass || '').toLowerCase().includes('house');
+  const canRequestAccount = role === 'inside_sales' && isHouseAccount;
+
+  // Request-access state (restricted field reps + inside_sales on house accounts)
   const [requesting, setRequesting] = useState(false);
   const [requested, setRequested] = useState(false);
   const handleRequestAccess = async () => {
@@ -506,6 +510,27 @@ export default function CustomerModal({ customer, onClose, task }: CustomerModal
                     }`}
                   >
                     {requested ? '✓ Access requested — admin notified' : requesting ? 'Sending…' : 'Request access'}
+                  </button>
+                </div>
+              )}
+
+              {/* House account banner for inside_sales */}
+              {canRequestAccount && (
+                <div className="rounded-xl border border-blue-200 bg-blue-50 p-3">
+                  <div className="flex items-center gap-2 mb-1">
+                    <p className="text-[11px] font-black text-blue-700 uppercase tracking-wider">House Account</p>
+                  </div>
+                  <p className="text-[11px] text-blue-700/80 leading-relaxed">
+                    This is a house account. Request it to have it assigned to you in the system.
+                  </p>
+                  <button
+                    onClick={handleRequestAccess}
+                    disabled={requesting || requested}
+                    className={`mt-2 w-full text-[11px] font-bold py-1.5 rounded-lg transition-colors ${
+                      requested ? 'bg-green-500 text-white' : 'bg-blue-500 hover:bg-blue-600 disabled:bg-blue-300 text-white'
+                    }`}
+                  >
+                    {requested ? '✓ Request sent — admin notified' : requesting ? 'Sending…' : 'Request Account'}
                   </button>
                 </div>
               )}

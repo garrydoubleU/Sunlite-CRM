@@ -502,6 +502,8 @@ function doGet(e) {
             const repName = lookupUserName(ss, obj.RequesterEmail) || obj.RequesterName || "";
             assignCustomerToRep(ss, obj.CustomerID, obj.CustomerName,
               String(obj.RequesterEmail).toLowerCase().trim(), repName, "admin", "Admin");
+            // Update Customer Type → SUNLITE on the Customers sheet
+            setCustomerType(ss, obj.CustomerID, obj.CustomerName, "SUNLITE");
           }
           return createJsonResponse({ status: "Success" });
         }
@@ -715,6 +717,27 @@ function rowToObj(headers, row) {
 function appendObj(sheet, obj) {
   const headers = sheet.getDataRange().getValues()[0].map(h => h.toString().replace(/\s+/g, ""));
   sheet.appendRow(headers.map(h => (obj[h] !== undefined ? obj[h] : "")));
+}
+
+function setCustomerType(ss, customerId, customerName, newType) {
+  const sheet = ss.getSheetByName("Customers");
+  if (!sheet) return;
+  const data    = sheet.getDataRange().getValues();
+  const headers = data[0].map(h => h.toString().toLowerCase().trim());
+  const idIdx   = headers.findIndex(h => h.includes("id"));
+  const nameIdx = headers.findIndex(h => h === "customername" || h === "customer");
+  const typeIdx = headers.findIndex(h => h === "customer type" || h === "customertype");
+  if (typeIdx === -1) return;
+  for (let i = 1; i < data.length; i++) {
+    const rowId   = String(data[i][idIdx]   || "").trim();
+    const rowName = String(data[i][nameIdx] || "").trim().toLowerCase();
+    const isMatch = (customerId   && rowId   === customerId.trim()) ||
+                    (customerName && rowName === customerName.toLowerCase().trim());
+    if (isMatch) {
+      sheet.getRange(i + 1, typeIdx + 1).setValue(newType);
+      return;
+    }
+  }
 }
 
 function setColumnByID(sheet, id, columnName, value) {
