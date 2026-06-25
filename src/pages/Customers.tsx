@@ -14,13 +14,9 @@ function isHouseAccount(c: Customer): boolean {
   return (c.customerClass || '').toLowerCase().includes('house');
 }
 
-function isPersonalAccount(c: Customer, myEmail: string): boolean {
-  const reps = (c.assignedRepId || '')
-    .toLowerCase()
-    .split(/[,;\s]+/)
-    .map(s => s.trim())
-    .filter(Boolean);
-  return reps.includes(myEmail);
+function isPersonalAccount(c: Customer, myName: string): boolean {
+  return !!(myName && c.assignedRepName &&
+    c.assignedRepName.toLowerCase().trim() === myName.toLowerCase().trim());
 }
 
 export default function Customers() {
@@ -29,6 +25,7 @@ export default function Customers() {
 
   const role    = currentUser?.role ?? 'field_sales';
   const myEmail = currentUser?.email?.toLowerCase() ?? '';
+  const myName  = currentUser?.name ?? '';
   const isRep   = role === 'field_sales' || role === 'inside_sales';
   const canRepFilter = role === 'customer_service' || role === 'owner' || role === 'admin';
   const showDirectory = role === 'field_sales' || role === 'inside_sales';
@@ -92,7 +89,7 @@ export default function Customers() {
   // House sub-filter (only on "mine" tab for inside_sales)
   if (role === 'inside_sales' && bookFilter === 'mine' && houseFilter !== 'all') {
     base = base.filter(c =>
-      houseFilter === 'house' ? isHouseAccount(c) : isPersonalAccount(c, myEmail)
+      houseFilter === 'house' ? isHouseAccount(c) : isPersonalAccount(c, myName)
     );
   }
 
@@ -127,7 +124,7 @@ export default function Customers() {
 
   // Counts for house filter badges
   const houseCount = role === 'inside_sales' ? customers.filter(c => isHouseAccount(c)).length : 0;
-  const mineCount  = role === 'inside_sales' ? customers.filter(c => isPersonalAccount(c, myEmail)).length : 0;
+  const mineCount  = role === 'inside_sales' ? customers.filter(c => isPersonalAccount(c, myName)).length : 0;
 
   const hasFilters = !!(search || tierFilter !== 'all' || freqFilter !== 'all' || repFilter !== 'all');
   const pendingCount = pendingIds.size;
