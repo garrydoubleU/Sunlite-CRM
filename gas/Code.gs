@@ -453,12 +453,14 @@ function doGet(e) {
         Status: "pending"
       });
       const requesterName = e.parameter.requesterName || e.parameter.requesterEmail || "A rep";
-      const customerName2 = e.parameter.customerName  || e.parameter.customerId    || "an account";
+      const customerName2 = e.parameter.customerName || "an account";
+      const customerId2   = e.parameter.customerId   || "";
+      const accountLabel  = customerName2 + (customerId2 ? " (" + customerId2 + ")" : "");
       const body = [
-        requesterName + " has requested access to: " + customerName2,
+        requesterName + " has requested access to: " + accountLabel,
         "",
         "Requester: " + (e.parameter.requesterEmail || ""),
-        "Account: "   + customerName2,
+        "Account: "   + accountLabel,
         "",
         "Log in to the admin dashboard to grant or deny access."
       ].join("\n");

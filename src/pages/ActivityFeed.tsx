@@ -3,7 +3,8 @@ import { Phone, MapPin, FileText, Mail } from 'lucide-react';
 import { format, parseISO, isToday, isYesterday, isThisWeek } from 'date-fns';
 import { useCustomerStore } from '../store/customerStore';
 import { useAuthStore } from '../store/authStore';
-import type { ActivityType } from '../types';
+import CustomerModal from '../components/CustomerModal';
+import type { ActivityType, Customer } from '../types';
 
 const TYPE_CONFIG: Record<ActivityType, { icon: React.ElementType; color: string; label: string }> = {
   call: { icon: Phone, color: 'bg-blue-100 text-blue-600', label: 'Call' },
@@ -29,6 +30,7 @@ export default function ActivityFeed() {
 
   const [typeFilter, setTypeFilter] = useState<'all' | ActivityType>('all');
   const [sourceFilter, setSourceFilter] = useState<'all' | 'manual' | 'gmail-auto'>('all');
+  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
 
   const sorted = useMemo(() => {
     return [...activities]
@@ -108,7 +110,13 @@ export default function ActivityFeed() {
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap mb-1">
-                        <span className="font-bold text-sm text-gray-800">{customer?.name ?? act.customerId}</span>
+                        {customer ? (
+                          <button onClick={() => setSelectedCustomer(customer)} className="font-bold text-sm text-gray-800 hover:text-amber-500 transition-colors text-left">
+                            {customer.name}
+                          </button>
+                        ) : (
+                          <span className="font-bold text-sm text-gray-800">{act.customerId}</span>
+                        )}
                         <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase ${color}`}>{label}</span>
                         {act.source === 'gmail-auto' && (
                           <span className="text-[9px] font-bold bg-red-100 text-red-500 px-1.5 py-0.5 rounded-full uppercase tracking-wide">Gmail Auto</span>
@@ -145,6 +153,10 @@ export default function ActivityFeed() {
           </div>
         )}
       </div>
+
+      {selectedCustomer && (
+        <CustomerModal customer={selectedCustomer} onClose={() => setSelectedCustomer(null)} />
+      )}
     </div>
   );
 }
