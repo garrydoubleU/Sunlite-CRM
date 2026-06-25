@@ -5,22 +5,45 @@ import { useAuthStore } from '../store/authStore';
 import CustomerCard from '../components/CustomerCard';
 import CustomerModal from '../components/CustomerModal';
 import type { Customer, VisitFrequency } from '../types';
+import toast from 'react-hot-toast';
 
 type BookFilter = 'mine' | 'pending' | 'directory';
+type HouseFilter = 'all' | 'mine' | 'house';
 type TierFilter = 'all' | '1' | '2' | '3' | '4';
 type FreqFilter = 'all' | VisitFrequency;
 
+function isHouseAccount(c: Customer, myEmail: string): boolean {
+  const cls = (c.customerClass || '').toLowerCase();
+  if (cls.includes('house')) return true;
+  // Also treat as house if the rep's own email isn't among the assigned reps
+  const reps = (c.assignedRepId || '')
+    .toLowerCase()
+    .split(/[,;\s]+/)
+    .map(s => s.trim())
+    .filter(Boolean);
+  return reps.length > 0 && !reps.includes(myEmail);
+}
+
 export default function Customers() {
-  const { customers, directory, accessRequests, lastSync, isSyncing } = useCustomerStore();
+  const { customers, directory, accessRequests, lastSync, isSyncing, requestAccess } = useCustomerStore();
   const { currentUser } = useAuthStore();
 
-  const role     = currentUser?.role ?? 'field_sales';
-  const myEmail  = currentUser?.email?.toLowerCase() ?? '';
-  const isRep    = role === 'field_sales' || role === 'inside_sales';
+  const role    = currentUser?.role ?? 'field_sales';
+  const myEmail = currentUser?.email?.toLowerCase() ?? '';
+  const isRep   = role === 'field_sales' || role === 'inside_sales';
   const canRepFilter = role === 'customer_service' || role === 'owner' || role === 'admin';
+  const showDirectory = role === 'field_sales' || role === 'inside_sales';
 
-  const [bookFilter, setBookFilter] = useState<BookFilter>('mine');
-  const [dirSearch, setDirSearch] = useState('');
+  const [bookFilter,  setBookFilter]  = useState<BookFilter>('mine');
+  const [houseFilter, setHouseFilter] = useState<HouseFilter>('all');
+  const [dirSearch,   setDirSearch]   = useState('');
+  const [search,      setSearch]      = useState('');
+  const [tierFilter,  setTierFilter]  = useState<TierFilter>('all');
+  const [freqFilter,  setFreqFilter]  = useState<FreqFilter>('all');
+  const [repFilter,   setRepFilter]   = useState<string>('all');
+  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
+  const [requestingIds, setRequestingIds] = useState<Set<string>>(new Set());
+
   const dirResults = useMemo(() => {
     const q = dirSearch.trim().toLowerCase();
     if (!q) return [];
@@ -32,17 +55,25 @@ export default function Customers() {
       )
       .slice(0, 40);
   }, [directory, dirSearch]);
-  const [search,     setSearch]     = useState('');
-  const [tierFilter, setTierFilter] = useState<TierFilter>('all');
-  const [freqFilter, setFreqFilter] = useState<FreqFilter>('all');
-  const [repFilter,  setRepFilter]  = useState<string>('all');
-  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
 
   function clearFilters() {
     setSearch('');
     setTierFilter('all');
     setFreqFilter('all');
     setRepFilter('all');
+  }
+
+  async function handleRequestAccount(c: Customer, e: React.MouseEvent) {
+    e.stopPropagation();
+    setRequestingIds(prev => new Set(prev).add(c.id));
+    try {
+      await requestAccess(c);
+      toast.success(`Request sent for ${c.name}`);
+    } catch {
+      toast.error('Request failed — try again');
+    } finally {
+      setRequestingIds(prev => { const s = new Set(prev); s.delete(c.id); return s; });
+    }
   }
 
   // ── Show spinner while first GAS load is in progress ──────────
@@ -64,20 +95,24 @@ export default function Customers() {
       .map(r => r.customerId)
   );
 
-  // Pick base:
-  // - reps on "mine" → their own book (customers)
-  // - reps on "pending" → full directory filtered to pending IDs
-  // - CS / admin / owner → full directory
+  // Pick base list
   let base: Customer[];
   if (isRep && bookFilter === 'pending') {
     base = fullDir.filter(c => pendingIds.has(c.id));
   } else if (isRep) {
-    base = customers; // "mine" — never touches fullDir
+    base = customers;
   } else {
     base = fullDir;
   }
 
-  // Apply all filters in one pass
+  // House sub-filter (only on "mine" tab for reps)
+  if (isRep && bookFilter === 'mine' && houseFilter !== 'all') {
+    base = base.filter(c =>
+      houseFilter === 'house' ? isHouseAccount(c, myEmail) : !isHouseAccount(c, myEmail)
+    );
+  }
+
+  // Apply search + tier/freq/rep filters
   const q = search.toLowerCase().trim();
   const filtered = base.filter(c => {
     if (q) {
@@ -89,7 +124,7 @@ export default function Customers() {
     }
     if (tierFilter !== 'all' && c.priorityTier !== parseInt(tierFilter)) return false;
     if (freqFilter !== 'all' && c.visitFrequency !== freqFilter) return false;
-    if (repFilter !== 'all' && c.assignedRepName !== repFilter) return false;
+    if (repFilter  !== 'all' && c.assignedRepName !== repFilter) return false;
     return true;
   });
 
@@ -106,6 +141,14 @@ export default function Customers() {
     repNames.sort();
   }
 
+  // Counts for house filter badges
+  const houseCount = isRep && bookFilter === 'mine'
+    ? customers.filter(c => isHouseAccount(c, myEmail)).length
+    : 0;
+  const mineCount = isRep && bookFilter === 'mine'
+    ? customers.filter(c => !isHouseAccount(c, myEmail)).length
+    : 0;
+
   const hasFilters = !!(search || tierFilter !== 'all' || freqFilter !== 'all' || repFilter !== 'all');
   const pendingCount = pendingIds.size;
 
@@ -113,13 +156,13 @@ export default function Customers() {
   return (
     <div>
 
-      {/* Book tabs — reps only: My Customers + Pending (+ Directory for field_sales) */}
+      {/* Book tabs — reps only */}
       {isRep && (
         <div className="flex gap-1 bg-gray-100 rounded-xl p-1 mb-4">
           {([
             { id: 'mine'      as BookFilter, label: 'My Customers', count: 0 },
             { id: 'pending'   as BookFilter, label: 'Pending',      count: pendingCount },
-            ...(role === 'field_sales' ? [{ id: 'directory' as BookFilter, label: 'Directory', count: 0 }] : []),
+            ...(showDirectory ? [{ id: 'directory' as BookFilter, label: 'Directory', count: 0 }] : []),
           ]).map(tab => (
             <button
               key={tab.id}
@@ -134,6 +177,38 @@ export default function Customers() {
                   {tab.count}
                 </span>
               )}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* House account sub-filter — shown on "mine" tab for inside_sales */}
+      {isRep && bookFilter === 'mine' && role === 'inside_sales' && (
+        <div className="flex gap-1 bg-gray-50 border border-gray-200 rounded-xl p-1 mb-4">
+          {([
+            { id: 'all'   as HouseFilter, label: 'All',            count: customers.length },
+            { id: 'mine'  as HouseFilter, label: 'My Accounts',    count: mineCount },
+            { id: 'house' as HouseFilter, label: 'House Accounts', count: houseCount },
+          ]).map(tab => (
+            <button
+              key={tab.id}
+              onClick={() => setHouseFilter(tab.id)}
+              className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                houseFilter === tab.id
+                  ? tab.id === 'house'
+                    ? 'bg-blue-500 text-white shadow-sm'
+                    : 'bg-white text-gray-900 shadow-sm'
+                  : 'text-gray-400 hover:text-gray-600'
+              }`}
+            >
+              {tab.label}
+              <span className={`text-[9px] font-black px-1.5 py-0.5 rounded-full ${
+                houseFilter === tab.id
+                  ? tab.id === 'house' ? 'bg-blue-400 text-white' : 'bg-gray-100 text-gray-600'
+                  : 'bg-gray-200 text-gray-400'
+              }`}>
+                {tab.count}
+              </span>
             </button>
           ))}
         </div>
@@ -264,12 +339,12 @@ export default function Customers() {
         </div>
       </div>
 
-      {/* Count — derived from the exact same array as the grid */}
+      {/* Count */}
       <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-4">
         {filtered.length} account{filtered.length !== 1 ? 's' : ''}
       </p>
 
-      {/* Grid — keyed on active filters so React fully replaces it on any change */}
+      {/* Grid */}
       {filtered.length === 0 ? (
         <div className="text-center py-16">
           {isRep && bookFilter === 'pending' ? (
@@ -287,16 +362,35 @@ export default function Customers() {
         </div>
       ) : (
         <div
-          key={`${bookFilter}|${tierFilter}|${freqFilter}|${repFilter}|${search}`}
+          key={`${bookFilter}|${houseFilter}|${tierFilter}|${freqFilter}|${repFilter}|${search}`}
           className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"
         >
-          {filtered.map(c => (
-            <CustomerCard
-              key={c.id}
-              customer={c}
-              onOpenModal={() => setSelectedCustomer(c)}
-            />
-          ))}
+          {filtered.map(c => {
+            const house = isRep && bookFilter === 'mine' && isHouseAccount(c, myEmail);
+            const alreadyRequested = pendingIds.has(c.id);
+            return (
+              <div key={c.id} className="relative">
+                <CustomerCard customer={c} onOpenModal={() => setSelectedCustomer(c)} />
+                {house && (
+                  <div className="absolute top-2 right-2">
+                    {alreadyRequested ? (
+                      <span className="text-[10px] font-bold px-2 py-1 bg-gray-100 text-gray-400 rounded-full">
+                        Requested
+                      </span>
+                    ) : (
+                      <button
+                        onClick={e => handleRequestAccount(c, e)}
+                        disabled={requestingIds.has(c.id)}
+                        className="text-[10px] font-bold px-2 py-1 bg-blue-500 hover:bg-blue-600 text-white rounded-full transition-colors disabled:opacity-50"
+                      >
+                        {requestingIds.has(c.id) ? '…' : 'Request Account'}
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
       )}
 
