@@ -516,6 +516,7 @@ function doGet(e) {
     // ──────────────────────────────────── 16. ADD CONTACT
     if (action === "addContact") {
       const customerName = e.parameter.customerName || "";
+      const customerId   = e.parameter.customerId   || "";
       const firstName    = e.parameter.firstName    || "";
       const lastName     = e.parameter.lastName     || "";
       const position     = e.parameter.position     || "";
@@ -530,20 +531,22 @@ function doGet(e) {
         customerName, firstName, lastName, position, contactEmail, addedBy, addedDate
       ]);
 
-      const fullName = [firstName, lastName].filter(Boolean).join(" ") || contactEmail;
+      const fullName     = [firstName, lastName].filter(Boolean).join(" ") || contactEmail;
+      const accountLabel = customerName + (customerId ? " (" + customerId + ")" : "");
       const body = [
-        "A new contact was added to " + customerName + ":",
+        "A new contact was added to " + accountLabel + ":",
         "",
-        "Name: "     + fullName,
-        "Position: " + (position     || "—"),
-        "Email: "    + (contactEmail || "—"),
+        "Account ID: " + (customerId || "—"),
+        "Name: "       + fullName,
+        "Position: "   + (position     || "—"),
+        "Email: "      + (contactEmail || "—"),
         "",
         "Added by: " + addedBy,
         "Date: "     + addedDate,
       ].join("\n");
       try {
         MailApp.sendEmail("garry@sunshinelighting.com",
-          "New Contact Added — " + customerName + ": " + fullName, body);
+          "New Contact Added — " + accountLabel + ": " + fullName, body);
       } catch(mailErr) {
         Logger.log("addContact email failed: " + mailErr.toString());
       }

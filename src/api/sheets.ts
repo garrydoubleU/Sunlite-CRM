@@ -391,6 +391,7 @@ export async function updateCustomerEmail(customerId: string, email: string): Pr
 }
 
 export async function addContactToSheet(params: {
+  customerId?: string;
   customerName: string;
   firstName?: string;
   lastName?: string;

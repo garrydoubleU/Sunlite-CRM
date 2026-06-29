@@ -146,6 +146,7 @@ export default function CustomerModal({ customer, onClose, task }: CustomerModal
     if (isGASConfigured()) {
       const { currentUser } = useAuthStore.getState();
       addContactToSheet({
+        customerId: customer.id,
         customerName: customer.name,
         firstName: entry.firstName,
         lastName: entry.lastName,
