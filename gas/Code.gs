@@ -1,6 +1,6 @@
 /**
  * GOOGLE APPS SCRIPT — SUNLITE CRM HUB
- * Version 4.0 — Styled HTML emails; assignment alerts to Simon, CW, and new rep
+ * Version 4.1 — Customer ID in access-request + new-contact emails; Customer Type → SUNLITE on approval
  *
  * Handles: login, customers (own + all), logs (read/save/delete), users,
  *          quick links, email send, gmail sync, customer-email update,
