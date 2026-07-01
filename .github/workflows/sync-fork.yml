@@ -19,5 +19,14 @@ jobs:
           git remote add fork https://garrydoubleU:${{ secrets.FORK_PAT }}@github.com/garrydoubleU/Sunlite-CRM.git
           git push fork HEAD:main --force
           git push fork HEAD:claude/eager-goldberg-p77x8t --force
-          sleep 5
-          curl -s -X POST ${{ secrets.VERCEL_DEPLOY_HOOK }}
+
+      - name: Trigger Vercel deploy hook (optional)
+        env:
+          VERCEL_DEPLOY_HOOK: ${{ secrets.VERCEL_DEPLOY_HOOK }}
+        run: |
+          if [ -n "$VERCEL_DEPLOY_HOOK" ]; then
+            sleep 5
+            curl -s -X POST "$VERCEL_DEPLOY_HOOK"
+          else
+            echo "No VERCEL_DEPLOY_HOOK set — skipping (Vercel auto-deploys from the fork)."
+          fi
