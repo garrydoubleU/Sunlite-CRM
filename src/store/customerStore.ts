@@ -274,7 +274,8 @@ export const useCustomerStore = create<CustomerState>((set, get) => ({
   getActivitiesForCustomer: (customerId: string) => {
     // GAS activity logs store customer name as the ID (no numeric ID in the log sheet).
     // Match on both the numeric ID and the customer name so both paths work.
-    const customer = get().customers.find(c => c.id === customerId);
+    const customer = get().customers.find(c => c.id === customerId)
+      ?? get().directory.find(c => c.id === customerId);
     const customerName = customer?.name?.toLowerCase() ?? '';
     return get().activities
       .filter(a =>
