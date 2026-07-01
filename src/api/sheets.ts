@@ -201,6 +201,7 @@ export interface GASActivity {
   type: 'note' | 'call' | 'visit' | 'email';
   date: string;
   repName: string;
+  loggerEmail?: string;
   summary: string;
   source?: 'manual' | 'gmail-auto';
   followUpDate?: string;
@@ -260,12 +261,16 @@ function mapRawLog(raw: Record<string, unknown>, idx: number): GASActivity {
     }
   }
 
+  // The reliable logger identity — the email column written at save time.
+  const loggerEmail = pick('useremail', 'salesrepemail', 'loggedbyemail', 'email').toLowerCase().trim();
+
   return {
     id: pick('id', 'logid') || `log_${idx}`,
     customerId: customerID || customerName,
     type: typeMap[logTypeStr] ?? 'note',
     date: safeDate(pick('timestamp', 'date')),
     repName,
+    ...(loggerEmail && loggerEmail.includes('@') ? { loggerEmail } : {}),
     summary: pick('notes', 'summary', 'note'),
     source: sourceStr === 'gmail-auto' ? 'gmail-auto' : 'manual',
     ...(followUpDate ? { followUpDate } : {}),

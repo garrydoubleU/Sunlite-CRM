@@ -56,6 +56,7 @@ function gasActivityToLocal(a: GASActivity): Activity {
     repName: a.repName,
     summary: a.summary,
     source: a.source ?? 'manual',
+    ...(a.loggerEmail ? { loggerEmail: a.loggerEmail } : {}),
     ...(a.followUpDate ? { followUpDate: a.followUpDate } : {}),
     ...(a.notifyRep ? { notifyRep: a.notifyRep } : {}),
   };
@@ -177,9 +178,14 @@ export const useCustomerStore = create<CustomerState>((set, get) => ({
         // re-populates it — that's what made search flaky).
         directory: seesAll ? customers : (state.directory.length > 0 ? state.directory : customers),
         emailToName,
-        activities: rawActivities.map(a => {
+        activities: rawActivities.map((a): Activity => {
           const repName = enrichRepName(a.repName);
-          return { ...gasActivityToLocal(a), repName, loggedByRole: roleOfLogger(a.repName) ?? roleOfLogger(repName) };
+          // Prefer the reliable logger email; fall back to name matching.
+          const loggedByRole: Role | undefined =
+            (a.loggerEmail ? (nameToRole[a.loggerEmail] as Role | undefined) : undefined)
+            ?? roleOfLogger(a.repName)
+            ?? roleOfLogger(repName);
+          return { ...gasActivityToLocal(a), repName, loggedByRole };
         }),
         lastSync: new Date(),
         isSyncing: false,

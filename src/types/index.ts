@@ -53,6 +53,7 @@ export interface Activity {
   source?: 'manual' | 'gmail-auto';
   followUpDate?: string;
   notifyRep?: boolean;
+  loggerEmail?: string;
   loggedByRole?: Role;
 }
 
