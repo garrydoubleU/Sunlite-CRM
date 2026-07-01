@@ -113,7 +113,19 @@ export default function CustomerModal({ customer, onClose, task }: CustomerModal
       fetchUsers()
         .then(us => {
           const m: Record<string, string> = {};
-          us.forEach(u => { if (u.name) m[u.name.toLowerCase().trim()] = u.role; });
+          us.forEach(u => {
+            if (!u.name) return;
+            const full = u.name.toLowerCase().trim();
+            m[full] = u.role;
+            // Also index by first name so a log by "Leah" matches user "Leah Cohen"
+            const first = full.split(/\s+/)[0];
+            if (first && !(first in m)) m[first] = u.role;
+            // And by email / email prefix
+            if (u.email) {
+              m[u.email.toLowerCase().trim()] = u.role;
+              m[u.email.toLowerCase().split('@')[0]] = u.role;
+            }
+          });
           setUserRoleMap(m);
         })
         .catch(() => {});
