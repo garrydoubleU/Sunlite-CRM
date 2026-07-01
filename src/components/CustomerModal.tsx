@@ -239,7 +239,7 @@ export default function CustomerModal({ customer, onClose, task }: CustomerModal
   const currentYear = new Date().getFullYear().toString();
 
   const handleSave = async () => {
-    const effectiveType: ActivityType | '' = restricted ? 'note' : logType;
+    const effectiveType: ActivityType | '' = restricted ? (logType || 'note') : logType;
     if (!notes.trim() || !effectiveType) return;
     setSaving(true);
     setGasDebug(null);
@@ -670,9 +670,13 @@ export default function CustomerModal({ customer, onClose, task }: CustomerModal
                   );
                 })()}
                 {restricted ? (
-                  <div className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-lg px-2.5 py-1.5">
-                    <FileText size={11} className="text-gray-400" />
-                    <span className="text-xs text-gray-500">Logged as a note</span>
+                  <div className="relative">
+                    <select value={logType} onChange={e => setLogType(e.target.value as ActivityType | '')} className={`w-full bg-gray-50 border rounded-lg px-2.5 py-1.5 text-xs outline-none appearance-none focus:border-amber-400 ${logType ? 'border-gray-200 text-gray-700' : 'border-gray-200 text-gray-500'}`}>
+                      <option value="note">Note</option>
+                      <option value="call">Phone Call</option>
+                      <option value="visit">Field Visit</option>
+                    </select>
+                    <ChevronDown size={10} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
                   </div>
                 ) : (
                   <div className="flex gap-2">
