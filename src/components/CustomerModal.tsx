@@ -106,35 +106,9 @@ export default function CustomerModal({ customer, onClose, task }: CustomerModal
   const activities = getActivitiesForCustomer(customer.id);
   const myName = currentUser?.name ?? '';
 
-  // Restricted mode: build a name→role map so we can tell CS notes from other reps' notes
-  const [userRoleMap, setUserRoleMap] = useState<Record<string, string>>({});
-  useEffect(() => {
-    if (restricted && isGASConfigured()) {
-      fetchUsers()
-        .then(us => {
-          const m: Record<string, string> = {};
-          us.forEach(u => {
-            if (!u.name) return;
-            const full = u.name.toLowerCase().trim();
-            m[full] = u.role;
-            // Also index by first name so a log by "Leah" matches user "Leah Cohen"
-            const first = full.split(/\s+/)[0];
-            if (first && !(first in m)) m[first] = u.role;
-            // And by email / email prefix
-            if (u.email) {
-              m[u.email.toLowerCase().trim()] = u.role;
-              m[u.email.toLowerCase().split('@')[0]] = u.role;
-            }
-          });
-          setUserRoleMap(m);
-        })
-        .catch(() => {});
-    }
-  }, [restricted]);
-
-  const roleOf   = (repName?: string) => userRoleMap[(repName || '').toLowerCase().trim()] || '';
   const isMine   = (a: { repName?: string }) => (a.repName || '').toLowerCase().trim() === myName.toLowerCase().trim();
-  const isCSNote = (a: { repName?: string }) => roleOf(a.repName) === 'customer_service';
+  // Customer service notes are public — visible to everyone. Role is stamped at load time.
+  const isCSNote = (a: { loggedByRole?: string }) => a.loggedByRole === 'customer_service';
 
   // In restricted mode reps see: their own notes + CS notes. Other reps' notes collapse into a banner.
   const displayActivities = restricted ? activities.filter(a => isMine(a) || isCSNote(a)) : activities;

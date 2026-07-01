@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { Customer, Activity, Assignment, AccessRequest, CSHandoff } from '../types';
+import type { Customer, Activity, Assignment, AccessRequest, CSHandoff, Role } from '../types';
 import { CUSTOMERS, ACTIVITIES } from '../api/mockData';
 import {
   fetchCustomers, fetchAllCustomers, fetchActivities, saveActivity as gasSave,
@@ -132,9 +132,25 @@ export const useCustomerStore = create<CustomerState>((set, get) => ({
 
       // Build email → display name map so log entries show "Garry" not the email
       const emailToName: Record<string, string> = {};
+      // Build a comprehensive name/email → role map so we can tell who logged what
+      const nameToRole: Record<string, string> = {};
       rawUsers.forEach(u => {
         if (u.email && u.name) emailToName[u.email.toLowerCase().trim()] = u.name;
+        if (u.name) {
+          const full = u.name.toLowerCase().trim();
+          nameToRole[full] = u.role;
+          const first = full.split(/\s+/)[0];
+          if (first && !(first in nameToRole)) nameToRole[first] = u.role;
+        }
+        if (u.email) {
+          nameToRole[u.email.toLowerCase().trim()] = u.role;
+          nameToRole[u.email.toLowerCase().split('@')[0]] = u.role;
+        }
       });
+      const roleOfLogger = (repName: string): Role | undefined => {
+        const key = (repName || '').toLowerCase().trim();
+        return (nameToRole[key] as Role) ?? (nameToRole[key.split(/\s+/)[0]] as Role) ?? undefined;
+      };
 
       const enrichRepName = (raw: string): string => {
         if (!raw || !raw.trim()) return 'Unknown';
@@ -161,7 +177,10 @@ export const useCustomerStore = create<CustomerState>((set, get) => ({
         // re-populates it — that's what made search flaky).
         directory: seesAll ? customers : (state.directory.length > 0 ? state.directory : customers),
         emailToName,
-        activities: rawActivities.map(a => ({ ...gasActivityToLocal(a), repName: enrichRepName(a.repName) })),
+        activities: rawActivities.map(a => {
+          const repName = enrichRepName(a.repName);
+          return { ...gasActivityToLocal(a), repName, loggedByRole: roleOfLogger(a.repName) ?? roleOfLogger(repName) };
+        }),
         lastSync: new Date(),
         isSyncing: false,
       }));
