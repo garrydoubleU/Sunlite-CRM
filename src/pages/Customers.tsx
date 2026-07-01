@@ -40,14 +40,14 @@ export default function Customers() {
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const dirResults = useMemo(() => {
     const q = dirSearch.trim().toLowerCase();
-    if (!q) return [];
-    return directory
-      .filter(c =>
-        c.name.toLowerCase().includes(q) ||
-        c.id.toLowerCase().includes(q) ||
-        (c.phone || '').toLowerCase().includes(q)
-      )
-      .slice(0, 40);
+    const list = q
+      ? directory.filter(c =>
+          c.name.toLowerCase().includes(q) ||
+          c.id.toLowerCase().includes(q) ||
+          (c.phone || '').toLowerCase().includes(q)
+        )
+      : [...directory].sort((a, b) => a.name.localeCompare(b.name));
+    return list.slice(0, q ? 40 : 100);
   }, [directory, dirSearch]);
 
   function clearFilters() {
@@ -209,8 +209,8 @@ export default function Customers() {
           {dirSearch.trim() && dirResults.length === 0 && (
             <p className="text-sm text-gray-400 text-center py-8">No accounts found.</p>
           )}
-          {!dirSearch.trim() && (
-            <p className="text-sm text-gray-400 text-center py-12">Start typing to search all accounts.</p>
+          {!dirSearch.trim() && dirResults.length > 0 && (
+            <p className="text-[11px] text-gray-400">Showing {dirResults.length}{directory.length > dirResults.length ? ` of ${directory.length}` : ''} accounts · search to narrow</p>
           )}
           <div className="space-y-2">
             {dirResults.map(c => (

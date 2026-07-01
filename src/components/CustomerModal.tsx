@@ -104,6 +104,41 @@ export default function CustomerModal({ customer, onClose, task }: CustomerModal
   // Prefer stored default signature, fall back to Gmail-fetched sig
   const signature = defaultSig?.body ?? gmailSig ?? null;
   const activities = getActivitiesForCustomer(customer.id);
+  const myName = currentUser?.name ?? '';
+
+  // Restricted mode: build a name→role map so we can tell CS notes from other reps' notes
+  const [userRoleMap, setUserRoleMap] = useState<Record<string, string>>({});
+  useEffect(() => {
+    if (restricted && isGASConfigured()) {
+      fetchUsers()
+        .then(us => {
+          const m: Record<string, string> = {};
+          us.forEach(u => { if (u.name) m[u.name.toLowerCase().trim()] = u.role; });
+          setUserRoleMap(m);
+        })
+        .catch(() => {});
+    }
+  }, [restricted]);
+
+  const roleOf   = (repName?: string) => userRoleMap[(repName || '').toLowerCase().trim()] || '';
+  const isMine   = (a: { repName?: string }) => (a.repName || '').toLowerCase().trim() === myName.toLowerCase().trim();
+  const isCSNote = (a: { repName?: string }) => roleOf(a.repName) === 'customer_service';
+
+  // In restricted mode reps see: their own notes + CS notes. Other reps' notes collapse into a banner.
+  const displayActivities = restricted ? activities.filter(a => isMine(a) || isCSNote(a)) : activities;
+  const otherRepActivities = restricted ? activities.filter(a => !isMine(a) && !isCSNote(a)) : [];
+
+  // Group other reps' activity → { name → most recent date }
+  const otherRepTouch: { name: string; date: string }[] = [];
+  if (restricted && otherRepActivities.length > 0) {
+    const byName: Record<string, string> = {};
+    otherRepActivities.forEach(a => {
+      const n = a.repName || 'Another rep';
+      if (!byName[n] || new Date(a.date) > new Date(byName[n])) byName[n] = a.date;
+    });
+    Object.entries(byName).forEach(([name, date]) => otherRepTouch.push({ name, date }));
+    otherRepTouch.sort((x, y) => new Date(y.date).getTime() - new Date(x.date).getTime());
+  }
 
   // Log form state
   const [notes, setNotes] = useState('');
@@ -501,7 +536,7 @@ export default function CustomerModal({ customer, onClose, task }: CustomerModal
                     <p className="text-[11px] font-black text-amber-700 uppercase tracking-wider">Not your account</p>
                   </div>
                   <p className="text-[11px] text-amber-700/80 leading-relaxed">
-                    This account is assigned to {customer.assignedRepName || 'another rep'}. You can see contact info and log a note, but not its history or sales. Request access for the full record.
+                    This account is assigned to {customer.assignedRepName || 'another rep'}. You can log a note and see your own notes, but not its full history or sales. Request access for the complete record.
                   </p>
                   <button
                     onClick={handleRequestAccess}
@@ -703,17 +738,33 @@ export default function CustomerModal({ customer, onClose, task }: CustomerModal
                 )}
               </div>}
 
-              {/* Divider — history hidden for restricted reps */}
-              {!restricted && (
+              {/* Other reps "in touch" banners — restricted mode only */}
+              {restricted && otherRepTouch.length > 0 && (
+                <div className="border-t border-gray-100 pt-3 space-y-2">
+                  {otherRepTouch.map(t => (
+                    <div key={t.name} className="rounded-xl border border-blue-100 bg-blue-50 px-3 py-2 flex items-center gap-2">
+                      <div className="w-5 h-5 rounded-full bg-blue-500 flex items-center justify-center text-white text-[8px] font-bold flex-shrink-0">
+                        {t.name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
+                      </div>
+                      <p className="text-[11px] text-blue-800 leading-tight">
+                        <span className="font-bold">{t.name}</span> is in touch with this customer
+                        <span className="text-blue-500"> · last log {safeFormat(t.date, 'MMM d, yyyy')}</span>
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* History — restricted reps see only their own + CS notes */}
               <div className="border-t border-gray-100 pt-1">
                 <p className="text-[10px] font-black text-gray-500 uppercase tracking-wider mb-3">
-                  History {activities.length > 0 && <span className="text-gray-400 font-normal normal-case">({activities.length})</span>}
+                  {restricted ? 'Your Notes & Customer Service' : 'History'} {displayActivities.length > 0 && <span className="text-gray-400 font-normal normal-case">({displayActivities.length})</span>}
                 </p>
                 <div className="space-y-2">
-                  {activities.length === 0 && (
-                    <p className="text-xs text-gray-400 text-center py-6">No activity logged yet.</p>
+                  {displayActivities.length === 0 && (
+                    <p className="text-xs text-gray-400 text-center py-6">{restricted ? 'You haven\'t logged anything here yet.' : 'No activity logged yet.'}</p>
                   )}
-                  {activities.map(activity => {
+                  {displayActivities.map(activity => {
                     const isEmailEntry = activity.type === 'email' || looksLikeEmail(activity.summary);
                     const parsed = isEmailEntry ? parseEmailSummary(activity.summary) : null;
 
@@ -790,7 +841,6 @@ export default function CustomerModal({ customer, onClose, task }: CustomerModal
                   })}
                 </div>
               </div>
-              )}
             </div>
           )}
 
