@@ -115,11 +115,6 @@ export default function CustomerModal({ customer, onClose, task }: CustomerModal
   const otherRepActivities = restricted ? activities.filter(a => !isMine(a) && !isCSNote(a)) : [];
 
   // Group other reps' activity → { name → most recent date }
-  // TEMP DEBUG — remove after diagnosing CS-note visibility
-  const debugRows = restricted
-    ? activities.map(a => `${a.repName} | email:${a.loggerEmail ?? '—'} | role:${a.loggedByRole ?? '—'}`)
-    : [];
-
   const otherRepTouch: { name: string; date: string }[] = [];
   if (restricted && otherRepActivities.length > 0) {
     const byName: Record<string, string> = {};
@@ -730,15 +725,6 @@ export default function CustomerModal({ customer, onClose, task }: CustomerModal
               </div>}
 
               {/* Other reps "in touch" banners — restricted mode only */}
-              {restricted && debugRows.length > 0 && (
-                <div className="rounded-lg border border-purple-200 bg-purple-50 px-2 py-1.5 space-y-0.5">
-                  <p className="text-[9px] font-black text-purple-500 uppercase">Debug (temp)</p>
-                  {debugRows.map((d, i) => (
-                    <p key={i} className="text-[9px] text-purple-700 font-mono break-all">{d}</p>
-                  ))}
-                </div>
-              )}
-
               {restricted && otherRepTouch.length > 0 && (
                 <div className="border-t border-gray-100 pt-3 space-y-2">
                   {otherRepTouch.map(t => (

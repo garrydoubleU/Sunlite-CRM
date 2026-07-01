@@ -180,11 +180,15 @@ export const useCustomerStore = create<CustomerState>((set, get) => ({
         emailToName,
         activities: rawActivities.map((a): Activity => {
           const repName = enrichRepName(a.repName);
-          // Prefer the reliable logger email; fall back to name matching.
-          const loggedByRole: Role | undefined =
-            (a.loggerEmail ? (nameToRole[a.loggerEmail] as Role | undefined) : undefined)
-            ?? roleOfLogger(a.repName)
-            ?? roleOfLogger(repName);
+          // A customer-service shared inbox (e.g. customer-service@…) is always
+          // treated as CS — its notes are public — even if the Users sheet role
+          // is mislabeled. Otherwise match by reliable email, then by name.
+          const csByEmail = /customer-?service|custserv|(^|[._-])cs@/i.test(a.loggerEmail ?? '');
+          const loggedByRole: Role | undefined = csByEmail
+            ? 'customer_service'
+            : (a.loggerEmail ? (nameToRole[a.loggerEmail] as Role | undefined) : undefined)
+              ?? roleOfLogger(a.repName)
+              ?? roleOfLogger(repName);
           return { ...gasActivityToLocal(a), repName, loggedByRole };
         }),
         lastSync: new Date(),
