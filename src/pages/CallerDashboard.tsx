@@ -5,7 +5,7 @@ import { useAuthStore } from '../store/authStore';
 import { safeDaysSince, safeFormat } from '../utils/scheduler';
 import CustomerModal from '../components/CustomerModal';
 import AssignmentAlert from '../components/AssignmentAlert';
-import type { Customer } from '../types';
+import type { Customer, CSHandoff } from '../types';
 
 const TIER_STYLE: Record<number, { bg: string; text: string; ring: string }> = {
   1: { bg: 'bg-red-100',    text: 'text-red-600',    ring: 'ring-red-200' },
@@ -112,16 +112,22 @@ function CallerCard({
 }
 
 export default function CallerDashboard() {
-  const { customers, activities, loadCSTasksSent } = useCustomerStore();
+  const { customers, activities, loadCSTasksSent, csHandoffs, loadCSHandoffs } = useCustomerStore();
   const { currentUser } = useAuthStore();
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
+  const [selectedTask, setSelectedTask] = useState<CSHandoff | undefined>(undefined);
+
+  const openHandoff = (h: CSHandoff) => {
+    const c = customers.find(x => x.id === h.customerId || x.name.toLowerCase() === h.customerName.toLowerCase());
+    if (c) { setSelectedCustomer(c); setSelectedTask(h); }
+  };
   const [expandedPriority, setExpandedPriority] = useState<number | null>(1);
   const [followUpsExpanded, setFollowUpsExpanded] = useState(true);
   const [dismissedFollowUps, setDismissedFollowUps] = useState<Set<string>>(new Set());
   const [mainTab, setMainTab] = useState<'queue' | 'tasks'>('queue');
   const now = new Date();
 
-  useEffect(() => { loadCSTasksSent(); }, []);
+  useEffect(() => { loadCSTasksSent(); loadCSHandoffs(); }, []);
 
   // My Tasks = activities this CS user logged with "notify rep" checked
   const myName = currentUser?.name ?? '';
@@ -263,21 +269,49 @@ export default function CallerDashboard() {
           className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-bold transition-all ${mainTab === 'tasks' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'}`}
         >
           <ListChecks size={12} /> My Tasks
-          {notifyTasks.length > 0 && <span className="w-4 h-4 bg-amber-500 text-white text-[9px] font-black rounded-full flex items-center justify-center">{notifyTasks.length}</span>}
+          {(notifyTasks.length + csHandoffs.length) > 0 && <span className="w-4 h-4 bg-amber-500 text-white text-[9px] font-black rounded-full flex items-center justify-center">{notifyTasks.length + csHandoffs.length}</span>}
         </button>
       </div>
 
       {/* ── Tasks tab ─────────────────────────────────────────────── */}
       {mainTab === 'tasks' && (
         <div className="space-y-4">
-          {notifyTasks.length === 0 ? (
+
+          {/* Assigned to me — tasks others handed off to this user */}
+          {csHandoffs.length > 0 && (
+            <div className="bg-white rounded-2xl border border-amber-200 shadow-sm overflow-hidden">
+              <div className="px-4 py-2.5 bg-amber-50 border-b border-amber-100 flex items-center justify-between">
+                <p className="text-[11px] font-bold text-amber-700 uppercase tracking-wider">Assigned to me</p>
+                <span className="text-[10px] font-bold bg-amber-500 text-white px-2 py-0.5 rounded-full">{csHandoffs.length}</span>
+              </div>
+              <div className="divide-y divide-gray-50">
+                {csHandoffs.map(h => (
+                  <div key={h.id} className="p-4 space-y-2">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <button onClick={() => openHandoff(h)} className="text-sm font-bold text-gray-900 hover:text-amber-700 hover:underline text-left truncate">{h.customerName}</button>
+                        <p className="text-[10px] text-gray-400 mt-0.5">{safeFormat(h.date, 'MMM d · h:mm a')} · {h.csName}</p>
+                      </div>
+                      <button onClick={() => openHandoff(h)} className="flex-shrink-0 text-[11px] font-bold bg-amber-500 hover:bg-amber-600 text-white px-3 py-1.5 rounded-lg transition-colors whitespace-nowrap shadow-sm">
+                        Open &amp; Complete
+                      </button>
+                    </div>
+                    {h.notes && <p className="text-xs text-gray-700 bg-gray-50 rounded-lg px-3 py-2 leading-relaxed">{h.notes}</p>}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {notifyTasks.length === 0 && csHandoffs.length === 0 ? (
             <div className="text-center py-12 bg-white rounded-2xl border border-gray-100">
               <CheckCircle size={28} className="text-green-400 mx-auto mb-2" />
               <p className="text-sm font-bold text-gray-700">No tasks yet</p>
               <p className="text-xs text-gray-400 mt-1">Tasks appear when you check "Notify rep" while logging an activity.</p>
             </div>
-          ) : (
+          ) : notifyTasks.length > 0 && (
             <div className="space-y-2">
+              {csHandoffs.length > 0 && <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wider px-1">Tasks I sent</p>}
               {notifyTasks.map(t => (
                 <div key={t.id} className="bg-white rounded-2xl border border-amber-200 p-4 space-y-2">
                   <div className="flex items-start justify-between gap-2">
@@ -464,7 +498,7 @@ export default function CallerDashboard() {
       </>}
 
       {selectedCustomer && (
-        <CustomerModal customer={selectedCustomer} onClose={() => setSelectedCustomer(null)} />
+        <CustomerModal customer={selectedCustomer} task={selectedTask} onClose={() => { setSelectedCustomer(null); setSelectedTask(undefined); }} />
       )}
     </div>
   );
