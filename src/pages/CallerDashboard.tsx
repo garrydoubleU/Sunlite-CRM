@@ -243,6 +243,29 @@ export default function CallerDashboard() {
 
       <AssignmentAlert />
 
+      {/* Unanswered tasks assigned to me — always visible, both tabs */}
+      {csHandoffs.length > 0 && (
+        <div className="bg-amber-500 rounded-2xl shadow-sm overflow-hidden">
+          <button
+            onClick={() => setMainTab('tasks')}
+            className="w-full px-4 py-3 flex items-center justify-between text-left hover:bg-amber-600 transition-colors"
+          >
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center">
+                <ListChecks size={16} className="text-white" />
+              </div>
+              <div>
+                <p className="text-sm font-black text-white">
+                  {csHandoffs.length} task{csHandoffs.length !== 1 ? 's' : ''} assigned to you
+                </p>
+                <p className="text-[11px] text-white/80">Tap to open and respond</p>
+              </div>
+            </div>
+            <ChevronDown size={16} className="text-white/80 -rotate-90" />
+          </button>
+        </div>
+      )}
+
       {/* Greeting */}
       <div className="flex items-end justify-between">
         <div>
