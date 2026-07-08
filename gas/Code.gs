@@ -1,6 +1,6 @@
 /**
  * GOOGLE APPS SCRIPT — SUNLITE CRM HUB
- * Version 4.1 — Customer ID in access-request + new-contact emails; Customer Type → SUNLITE on approval
+ * Version 4.2 — Instant email to rep when a follow-up is scheduled on their account by someone else
  *
  * Handles: login, customers (own + all), logs (read/save/delete), users,
  *          quick links, email send, gmail sync, customer-email update,
@@ -287,6 +287,29 @@ function doGet(e) {
             "",
             logType || "note"
           ]);
+        }
+      }
+
+      // D. Instant email when a follow-up is scheduled on a rep's account by
+      //    someone else (e.g. customer service). The rep no longer has to wait
+      //    for the morning digest. Skipped if notifyRep already emailed them.
+      const followUpSet = followUpDate && String(followUpDate).trim() !== "";
+      if (followUpSet && !notifyRep) {
+        const rep = resolveAccountRep(ss, customerID, customerName);
+        if (rep.email && rep.email !== userEmail) {
+          const appUrl = getAppUrl();
+          const fuStr  = String(followUpDate).split("T")[0];
+          const plain  = buildPlainFollowUp(rep.name, customerName, fuStr, appUrl);
+          const html   = buildFollowUpEmail(rep.name, customerName, fuStr, appUrl);
+          try {
+            MailApp.sendEmail(rep.email,
+              "Follow-up scheduled — " + customerName,
+              plain,
+              { htmlBody: html, name: "Sunlite CRM" }
+            );
+          } catch(mailErr) {
+            Logger.log("Follow-up email failed: " + mailErr.toString());
+          }
         }
       }
 
@@ -657,6 +680,47 @@ function createJsonResponse(data) {
 
 function getAppUrl() {
   return PropertiesService.getScriptProperties().getProperty("APP_URL") || "https://sunlite-crm.vercel.app/";
+}
+
+// Resolve the assigned rep's { email, name } for an account, matching the
+// account's Salesperson Name against the Users sheet.
+function resolveAccountRep(ss, customerID, customerName) {
+  const custSheet = ss.getSheetByName("Customers");
+  if (!custSheet) return { email: "", name: "" };
+  const custData = custSheet.getDataRange().getValues();
+  const headers  = custData[0].map(h => h.toString().replace(/\s+/g, "").toLowerCase());
+  const idIdx    = headers.findIndex(h => h === "customerid" || h === "custid" || h === "id");
+  const nameIdx  = headers.findIndex(h => h === "customername" || h === "customer");
+  const repIdx   = headers.findIndex(h => h === "salespersonname" || h === "repname");
+  if (repIdx === -1) return { email: "", name: "" };
+
+  let repDisplayName = "";
+  for (let i = 1; i < custData.length; i++) {
+    const rowId   = String(custData[i][idIdx]   || "").trim();
+    const rowName = String(custData[i][nameIdx] || "").trim().toLowerCase();
+    const isMatch = (customerID && rowId === String(customerID).trim()) ||
+                    (customerName && rowName === String(customerName).toLowerCase().trim());
+    if (isMatch) { repDisplayName = String(custData[i][repIdx] || "").trim(); break; }
+  }
+  if (!repDisplayName) return { email: "", name: "" };
+
+  const uSheet = ss.getSheetByName("Users");
+  if (!uSheet) return { email: "", name: repDisplayName };
+  const uData     = uSheet.getDataRange().getValues();
+  const uH        = uData[0].map(h => h.toString().toLowerCase().trim());
+  const uEmailIdx = uH.indexOf("email");
+  const uNameIdx  = uH.indexOf("username");
+  const repLower  = repDisplayName.toLowerCase();
+  for (let i = 1; i < uData.length; i++) {
+    const uName = String(uData[i][uNameIdx] || "").trim().toLowerCase();
+    if (uName && uName === repLower) {
+      return {
+        email: String(uData[i][uEmailIdx] || "").toLowerCase().trim(),
+        name:  String(uData[i][uNameIdx]  || "").trim(),
+      };
+    }
+  }
+  return { email: "", name: repDisplayName };
 }
 
 function typeLabel(t) {
@@ -1245,4 +1309,30 @@ function buildAssignmentEmail(repFirstName, customerName, assignedBy, appUrl) {
     ${accountCard(customerName)}
     ${ctaButton("View Account →", appUrl)}`;
   return emailShell("New Account Assignment", body);
+}
+
+// Follow-up scheduled on a rep's account by someone else
+function buildFollowUpEmail(repName, customerName, followUpDate, appUrl) {
+  const first = (repName || "there").split(" ")[0];
+  const body = `
+    <p style="margin:0 0 8px;font-size:15px;color:#111;">Hi ${first},</p>
+    <p style="margin:0 0 24px;font-size:14px;color:#555;line-height:1.6;">
+      A follow-up has been scheduled on one of your accounts for <strong>${followUpDate}</strong>.
+    </p>
+    ${accountCard(customerName)}
+    ${ctaButton("Open in Sunlite CRM →", appUrl)}`;
+  return emailShell("Follow-up Scheduled", body);
+}
+
+function buildPlainFollowUp(repName, customerName, followUpDate, appUrl) {
+  const first = (repName || "there").split(" ")[0];
+  return [
+    "Hi " + first + ",",
+    "",
+    "A follow-up has been scheduled on your account " + customerName + " for " + followUpDate + ".",
+    "",
+    "Open it in Sunlite CRM: " + appUrl,
+    "",
+    "— Sunlite CRM"
+  ].join("\n");
 }
