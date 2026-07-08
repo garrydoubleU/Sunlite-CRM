@@ -1,6 +1,6 @@
 /**
  * GOOGLE APPS SCRIPT — SUNLITE CRM HUB
- * Version 4.3 — Forgiving rep name match (falls back to first name) for all rep-notification emails
+ * Version 4.4 — Vague task email: "New task — [Customer] ([ID])", log in to see details
  *
  * Handles: login, customers (own + all), logs (read/save/delete), users,
  *          quick links, email send, gmail sync, customer-email update,
@@ -240,13 +240,14 @@ function doGet(e) {
         let firstRepName  = repLookup.name || repDisplayName;
 
         if (firstRepEmail) {
-          const activityLabel = typeLabel(cleanType) || logType || "Activity";
-          const appUrl        = getAppUrl();
-          const plainBody     = buildPlainNotify(firstRepName, customerName, activityLabel, appUrl);
-          const htmlBody      = buildNotifyEmail(firstRepName, customerName, activityLabel, appUrl);
+          const appUrl     = getAppUrl();
+          const custIdLabel = customerID || "";
+          const plainBody  = buildPlainNotify(firstRepName, customerName, custIdLabel, appUrl);
+          const htmlBody   = buildNotifyEmail(firstRepName, customerName, custIdLabel, appUrl);
+          const subject    = "New task — " + customerName + (custIdLabel ? " (" + custIdLabel + ")" : "");
           try {
             MailApp.sendEmail(firstRepEmail,
-              "New notification — " + customerName,
+              subject,
               plainBody,
               { htmlBody: htmlBody, name: "Sunlite CRM" }
             );
@@ -1233,12 +1234,16 @@ function emailShell(headerLabel, bodyContent) {
 </html>`;
 }
 
-function accountCard(customerName) {
+function accountCard(customerName, customerId) {
+  const idLine = customerId
+    ? `<p style="margin:6px 0 0;font-size:12px;font-weight:600;color:#92400e;font-family:monospace;">ID: ${customerId}</p>`
+    : "";
   return `
     <table width="100%" cellpadding="0" cellspacing="0" style="background:#fffbeb;border:1px solid #fde68a;border-radius:12px;margin-bottom:28px;">
       <tr><td style="padding:20px 24px;">
         <p style="margin:0 0 4px;font-size:11px;font-weight:700;color:#92400e;text-transform:uppercase;letter-spacing:1px;">Account</p>
         <p style="margin:0;font-size:18px;font-weight:900;color:#111;">${customerName}</p>
+        ${idLine}
       </td></tr>
     </table>`;
 }
@@ -1253,20 +1258,22 @@ function ctaButton(label, url) {
 }
 
 // Notify rep: CS logged activity on their account
-function buildNotifyEmail(repName, customerName, activityType, appUrl) {
+function buildNotifyEmail(repName, customerName, customerId, appUrl) {
+  const first = (repName || "there").split(" ")[0];
   const body = `
-    <p style="margin:0 0 8px;font-size:15px;color:#111;">Hi ${repName},</p>
-    <p style="margin:0 0 24px;font-size:14px;color:#555;line-height:1.6;">A new <strong>${activityType}</strong> was logged on one of your accounts.</p>
-    ${accountCard(customerName)}
-    ${ctaButton("View in Sunlite CRM →", appUrl)}`;
-  return emailShell("CRM Notification", body);
+    <p style="margin:0 0 8px;font-size:15px;color:#111;">Hi ${first},</p>
+    <p style="margin:0 0 24px;font-size:14px;color:#555;line-height:1.6;">You have a new task on one of your accounts. Log in to see the details.</p>
+    ${accountCard(customerName, customerId)}
+    ${ctaButton("Log in to see details →", appUrl)}`;
+  return emailShell("New Task", body);
 }
 
-function buildPlainNotify(repName, customerName, activityType, appUrl) {
+function buildPlainNotify(repName, customerName, customerId, appUrl) {
+  const first = (repName || "there").split(" ")[0];
   return [
-    "Hi " + repName + ",",
+    "Hi " + first + ",",
     "",
-    "A new " + activityType + " was logged on account: " + customerName + ".",
+    "You have a new task on account: " + customerName + (customerId ? " (" + customerId + ")" : "") + ".",
     "",
     "Log in to see the details: " + appUrl,
     "",
