@@ -1,6 +1,6 @@
 /**
  * GOOGLE APPS SCRIPT — SUNLITE CRM HUB
- * Version 4.2 — Instant email to rep when a follow-up is scheduled on their account by someone else
+ * Version 4.3 — Forgiving rep name match (falls back to first name) for all rep-notification emails
  *
  * Handles: login, customers (own + all), logs (read/save/delete), users,
  *          quick links, email send, gmail sync, customer-email update,
@@ -235,26 +235,9 @@ function doGet(e) {
           }
         }
 
-        let firstRepEmail = "";
-        let firstRepName  = repDisplayName;
-        if (repDisplayName) {
-          const uSheet = ss.getSheetByName("Users");
-          if (uSheet) {
-            const uData     = uSheet.getDataRange().getValues();
-            const uH        = uData[0].map(h => h.toString().toLowerCase().trim());
-            const uEmailIdx = uH.indexOf("email");
-            const uNameIdx  = uH.indexOf("username");
-            const repLower  = repDisplayName.toLowerCase();
-            for (let i = 1; i < uData.length; i++) {
-              const uName = String(uData[i][uNameIdx] || "").trim().toLowerCase();
-              if (uName && uName === repLower) {
-                firstRepEmail = String(uData[i][uEmailIdx] || "").toLowerCase().trim();
-                firstRepName  = String(uData[i][uNameIdx]  || "").trim();
-                break;
-              }
-            }
-          }
-        }
+        const repLookup   = lookupRepByName(ss, repDisplayName);
+        let firstRepEmail = repLookup.email;
+        let firstRepName  = repLookup.name || repDisplayName;
 
         if (firstRepEmail) {
           const activityLabel = typeLabel(cleanType) || logType || "Activity";
@@ -704,22 +687,36 @@ function resolveAccountRep(ss, customerID, customerName) {
   }
   if (!repDisplayName) return { email: "", name: "" };
 
+  return lookupRepByName(ss, repDisplayName);
+}
+
+// Find a user's { email, name } from a name. Tries an exact (case-insensitive)
+// match first, then falls back to a first-name match so an account that says
+// "Josh" still finds the user "Josh Friedman". First-name match is only used
+// when it is unambiguous (exactly one user with that first name).
+function lookupRepByName(ss, repDisplayName) {
+  if (!repDisplayName) return { email: "", name: "" };
   const uSheet = ss.getSheetByName("Users");
   if (!uSheet) return { email: "", name: repDisplayName };
   const uData     = uSheet.getDataRange().getValues();
   const uH        = uData[0].map(h => h.toString().toLowerCase().trim());
   const uEmailIdx = uH.indexOf("email");
   const uNameIdx  = uH.indexOf("username");
-  const repLower  = repDisplayName.toLowerCase();
+  const target    = repDisplayName.toLowerCase().trim();
+  const targetFirst = target.split(/\s+/)[0];
+
+  let exact = null;
+  const firstMatches = [];
   for (let i = 1; i < uData.length; i++) {
-    const uName = String(uData[i][uNameIdx] || "").trim().toLowerCase();
-    if (uName && uName === repLower) {
-      return {
-        email: String(uData[i][uEmailIdx] || "").toLowerCase().trim(),
-        name:  String(uData[i][uNameIdx]  || "").trim(),
-      };
-    }
+    const uName  = String(uData[i][uNameIdx]  || "").trim();
+    const uEmail = String(uData[i][uEmailIdx] || "").toLowerCase().trim();
+    if (!uName) continue;
+    const uLower = uName.toLowerCase();
+    if (uLower === target) { exact = { email: uEmail, name: uName }; break; }
+    if (uLower.split(/\s+/)[0] === targetFirst) firstMatches.push({ email: uEmail, name: uName });
   }
+  if (exact) return exact;
+  if (firstMatches.length === 1) return firstMatches[0];
   return { email: "", name: repDisplayName };
 }
 
