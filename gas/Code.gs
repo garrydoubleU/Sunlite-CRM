@@ -1021,6 +1021,22 @@ function syncNewCustomerEmails() {
 // DAILY DIGEST
 // ─────────────────────────────────────────────────────────────────
 
+/**
+ * TEST — run this from the Apps Script editor dropdown to preview the task
+ * assignment email. It sends the sample email to whoever runs it.
+ */
+function testTaskEmail() {
+  const me      = Session.getEffectiveUser().getEmail();
+  const appUrl  = getAppUrl();
+  const name    = "Test Account Hardware";
+  const custId  = "TEST123";
+  const subject = "New task — " + name + " (" + custId + ")";
+  MailApp.sendEmail(me, subject,
+    buildPlainNotify("Josh Friedman", name, custId, appUrl),
+    { htmlBody: buildNotifyEmail("Josh Friedman", name, custId, appUrl), name: "Sunlite CRM" });
+  Logger.log("Sent test task email to " + me);
+}
+
 function dailyNotifications() {
   const dow = new Date().getDay();
   if (dow === 0 || dow === 6) return; // skip weekends
