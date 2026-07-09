@@ -206,10 +206,14 @@ export default function CallerDashboard() {
   // Priority queue: all active customers not in follow-up list, contacted sorted last
   const followUpIds = new Set(followUpCustomers.map(c => c.id));
 
-  const isRepAccount = (c: Customer) => (c.customerClass || '').trim().toUpperCase() === 'REP';
+  // Only REP accounts that have a Rep Group filled in are promoted to the top
+  // call list — that column is how CS opts an account into the list. A REP
+  // account with a blank Rep Group just behaves like a normal tier account.
+  const isRepAccount = (c: Customer) =>
+    (c.customerClass || '').trim().toUpperCase() === 'REP' && !!(c.repGroup && c.repGroup.trim());
 
   // Group by priority tier (include ALL active customers, not just overdue).
-  // Rep accounts (Customer Type = REP) are pulled out into their own top list.
+  // Rep accounts (opted in via Rep Group) are pulled out into their own top list.
   const priorityGroups: Record<number, Customer[]> = { 1: [], 2: [], 3: [], 4: [], 5: [] };
   const repAccounts: Customer[] = [];
   customers
