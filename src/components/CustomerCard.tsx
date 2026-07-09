@@ -66,6 +66,9 @@ export default function CustomerCard({ customer, onOpenModal }: CustomerCardProp
               {customer.customerClass && (
                 <span className="text-[9px] font-bold bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded-full">{customer.customerClass}</span>
               )}
+              {customer.repGroup && customer.repGroup.trim() && (
+                <span className="text-[9px] font-bold bg-indigo-100 text-indigo-600 px-1.5 py-0.5 rounded-full truncate max-w-[110px]">{customer.repGroup}</span>
+              )}
             </div>
           </div>
           <span className={`text-[10px] font-bold px-2 py-1 rounded-full uppercase tracking-wide ${TIER_COLORS[customer.priorityTier]}`}>

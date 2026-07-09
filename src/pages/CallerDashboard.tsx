@@ -67,6 +67,9 @@ function CallerCard({
           {customer.customerClass && (
             <span className="text-[9px] font-bold bg-gray-100 text-gray-400 px-1.5 py-0.5 rounded-full flex-shrink-0">{customer.customerClass}</span>
           )}
+          {customer.repGroup && customer.repGroup.trim() && (
+            <span className="text-[9px] font-bold bg-indigo-100 text-indigo-600 px-1.5 py-0.5 rounded-full flex-shrink-0 truncate max-w-[120px]">{customer.repGroup}</span>
+          )}
         </div>
         {isFollowUp && followUpDate && (
           <p className="text-[10px] font-semibold text-amber-600 mt-0.5">
