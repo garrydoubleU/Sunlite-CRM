@@ -1,6 +1,6 @@
 /**
  * GOOGLE APPS SCRIPT — SUNLITE CRM HUB
- * Version 4.4 — Vague task email: "New task — [Customer] ([ID])", log in to see details
+ * Version 4.5 — Map "Rep Group" column so rep-managed accounts show their rep group
  *
  * Handles: login, customers (own + all), logs (read/save/delete), users,
  *          quick links, email send, gmail sync, customer-email update,
@@ -744,6 +744,7 @@ function mapCustomerRow(headers, row) {
     if (low === "assignedsalesman" || low === "assigned salesman")      { assignedSalesman = String(row[i] || "").trim(); }
     if (low === "salesperson name")                                     key = "SalespersonName";
     if (low === "customer type")                                        key = "CustomerType";
+    if (low === "rep group" || low === "repgroup")                      key = "RepGroup";
     if (low === "last order date")                                      key = "LastOrderDate";
     if (low === "last contact date" || low === "lastcontactdate" ||
         low.includes("lastcontact"))                                    key = "LastContactDate";

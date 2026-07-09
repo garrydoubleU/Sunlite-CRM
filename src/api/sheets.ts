@@ -92,6 +92,7 @@ export interface GASCustomer {
   email: string;
   priorityTier: number;
   customerClass: string;
+  repGroup: string;
   visitFrequency: 'weekly' | 'biweekly' | 'monthly' | '';
   lastContactDate: string;
   activeStatus: boolean;
@@ -166,6 +167,7 @@ function mapRawCustomer(r: Record<string, unknown>): GASCustomer {
     email: String(r.Email ?? r.CustomerEmail ?? r.email ?? ''),
     priorityTier: tier as 1 | 2 | 3 | 4,
     customerClass: String(r['Customer Type'] ?? r.CustomerType ?? r.Category ?? r.CustomerClass ?? r.Type ?? ''),
+    repGroup: String(r.RepGroup ?? r['Rep Group'] ?? ''),
     visitFrequency: freq,
     lastContactDate: safeDate(r.LastContactDate ?? r.LastContact ?? r.LastOrderDate ?? r.VisitStartDate),
     activeStatus: String(r.Status ?? r.status ?? 'active').toLowerCase() !== 'inactive',

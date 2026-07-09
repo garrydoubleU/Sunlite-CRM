@@ -423,16 +423,21 @@ export default function CustomerModal({ customer, onClose, task }: CustomerModal
             </span>
             <span className="text-[10px] text-blue-400">·</span>
             <span className="text-[10px] text-blue-200">{customer.openOrderCount} open order{customer.openOrderCount !== 1 ? 's' : ''}</span>
-            <span className="text-[10px] text-blue-400">·</span>
-            <span className="text-[10px] text-blue-200 flex items-center gap-1">
-              {customer.customerClass ? (
-                <span className="bg-white/20 text-white text-[9px] font-bold px-2 py-0.5 rounded-full">
-                  {customer.customerClass}
-                </span>
-              ) : null}
-              {customer.assignedRepName.split(' ')[0]}
-            </span>
+            {customer.assignedRepName && (
+              <>
+                <span className="text-[10px] text-blue-400">·</span>
+                <span className="text-[10px] text-blue-200">{customer.assignedRepName.split(' ')[0]}</span>
+              </>
+            )}
           </div>
+
+          {/* Rep group — which rep this customer is under */}
+          {customer.repGroup && (
+            <div className="mt-2 inline-flex items-center gap-1.5 bg-white/10 border border-white/15 rounded-lg px-2.5 py-1">
+              <span className="text-[9px] font-bold text-blue-300 uppercase tracking-wider">Rep Group</span>
+              <span className="text-[11px] font-bold text-white">{customer.repGroup}</span>
+            </div>
+          )}
 
           {/* Action buttons */}
           <div className="flex gap-2 mt-3">

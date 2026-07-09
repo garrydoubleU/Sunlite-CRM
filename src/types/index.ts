@@ -34,6 +34,7 @@ export interface Customer {
   email: string;
   priorityTier: PriorityTier;
   customerClass: string;
+  repGroup?: string;
   visitFrequency: VisitFrequency;
   lastContactDate: string;
   activeStatus: boolean;

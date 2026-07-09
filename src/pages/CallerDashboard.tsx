@@ -122,6 +122,7 @@ export default function CallerDashboard() {
     if (c) { setSelectedCustomer(c); setSelectedTask(h); }
   };
   const [expandedPriority, setExpandedPriority] = useState<number | null>(1);
+  const [repExpanded, setRepExpanded] = useState(true);
   const [followUpsExpanded, setFollowUpsExpanded] = useState(true);
   const [dismissedFollowUps, setDismissedFollowUps] = useState<Set<string>>(new Set());
   const [mainTab, setMainTab] = useState<'queue' | 'tasks'>('queue');
@@ -205,26 +206,31 @@ export default function CallerDashboard() {
   // Priority queue: all active customers not in follow-up list, contacted sorted last
   const followUpIds = new Set(followUpCustomers.map(c => c.id));
 
-  // Group by priority tier (include ALL active customers, not just overdue)
+  const isRepAccount = (c: Customer) => (c.customerClass || '').trim().toUpperCase() === 'REP';
+
+  // Group by priority tier (include ALL active customers, not just overdue).
+  // Rep accounts (Customer Type = REP) are pulled out into their own top list.
   const priorityGroups: Record<number, Customer[]> = { 1: [], 2: [], 3: [], 4: [], 5: [] };
+  const repAccounts: Customer[] = [];
   customers
     .filter(c => c.activeStatus && !followUpIds.has(c.id))
     .forEach(c => {
+      if (isRepAccount(c)) { repAccounts.push(c); return; }
       const tier = Math.min(c.priorityTier, 5) as 1 | 2 | 3 | 4 | 5;
       priorityGroups[tier].push(c);
     });
 
   // Sort each group: overdue (30+ days) first by most overdue, then contacted at bottom
-  Object.values(priorityGroups).forEach(group =>
-    group.sort((a, b) => {
-      const da = effectiveDaysAgo(a);
-      const db = effectiveDaysAgo(b);
-      const aContacted = da < 30;
-      const bContacted = db < 30;
-      if (aContacted !== bContacted) return aContacted ? 1 : -1; // contacted go last
-      return db - da; // most overdue first within each section
-    })
-  );
+  const queueSort = (a: Customer, b: Customer) => {
+    const da = effectiveDaysAgo(a);
+    const db = effectiveDaysAgo(b);
+    const aContacted = da < 30;
+    const bContacted = db < 30;
+    if (aContacted !== bContacted) return aContacted ? 1 : -1; // contacted go last
+    return db - da; // most overdue first within each section
+  };
+  Object.values(priorityGroups).forEach(group => group.sort(queueSort));
+  repAccounts.sort(queueSort);
 
   const totalQueue = Object.values(priorityGroups).reduce((s, g) => s + g.filter(c => effectiveDaysAgo(c) >= 30).length, 0);
 
@@ -430,6 +436,54 @@ export default function CallerDashboard() {
         <p className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.15em] px-1">
           Call Queue — No contact in 30+ days
         </p>
+
+        {/* Rep Accounts — top-priority call list, above Priority 1 */}
+        {repAccounts.length > 0 && (
+          <div className="bg-white rounded-2xl border-2 border-indigo-200 shadow-sm overflow-hidden">
+            <button
+              className="w-full px-4 py-3 flex items-center justify-between hover:bg-indigo-50/40 transition-colors"
+              onClick={() => setRepExpanded(v => !v)}
+            >
+              <div className="flex items-center gap-3">
+                <span className="text-xs font-black px-2.5 py-1 rounded-lg bg-indigo-100 text-indigo-700">
+                  Rep Accounts
+                </span>
+                <span className="text-xs text-gray-500">{repAccounts.length} accounts</span>
+                <span className="text-[10px] font-bold text-indigo-500 uppercase tracking-wide">Call first</span>
+              </div>
+              <div className="flex items-center gap-2">
+                {(() => {
+                  const contacted = repAccounts.filter(c => effectiveDaysAgo(c) < 30).length;
+                  return contacted > 0 ? (
+                    <span className="text-[10px] font-bold bg-green-100 text-green-600 px-2 py-0.5 rounded-full">
+                      {contacted}/{repAccounts.length} contacted
+                    </span>
+                  ) : null;
+                })()}
+                {repExpanded ? <ChevronUp size={15} className="text-gray-400" /> : <ChevronDown size={15} className="text-gray-400" />}
+              </div>
+            </button>
+            {repExpanded && (
+              <div className="px-3 pb-3 space-y-2 border-t border-indigo-50">
+                <div className="pt-2 space-y-2">
+                  {repAccounts.map(c => {
+                    const days = effectiveDaysAgo(c);
+                    return (
+                      <CallerCard
+                        key={c.id}
+                        customer={c}
+                        daysAgo={days}
+                        onOpen={() => setSelectedCustomer(c)}
+                        isFollowUp={false}
+                        isContacted={days < 30}
+                      />
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
 
         {([1, 2, 3, 4, 5] as const).map(priority => {
           const group = priorityGroups[priority];
