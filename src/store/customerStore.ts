@@ -37,6 +37,7 @@ function gasCustomerToLocal(c: GASCustomer): Customer {
     email: c.email,
     priorityTier: c.priorityTier as 1 | 2 | 3 | 4,
     customerClass: c.customerClass,
+    repGroup: c.repGroup,
     visitFrequency: c.visitFrequency,
     lastContactDate: c.lastContactDate,
     activeStatus: c.activeStatus,
